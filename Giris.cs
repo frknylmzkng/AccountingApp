@@ -85,7 +85,7 @@ namespace WinFormsApp2
                     if (connection.State == ConnectionState.Open)
                     {
                         connection.Close();
-                    }
+                    } //DENEME
                 }
             }
 
