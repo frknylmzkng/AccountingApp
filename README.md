@@ -2,6 +2,25 @@
 
 .NET 10 Windows Forms uygulaması: personel, izin ve kalan ödeme tutarı takibi. Rehberdeki yöntemler mevcut işlevlere uyarlandı. Ayrıntılı madde eşlemesi `docs/REHBER_UYGULAMA_TAKIBI.md`, kullanım ve sınama adımları `docs/KULLANIM_VE_TEST.md` içindedir.
 
+## Windows paketini indir ve kur
+
+**[Windows x64 paketini indir (v1.0.0)](https://github.com/frknylmzkng/AccountingApp/releases/download/v1.0.0/AccountingApp-v1.0.0-win-x64.zip)** · [Sürüm notları](https://github.com/frknylmzkng/AccountingApp/releases/tag/v1.0.0) · [SHA256 doğrulama dosyası](https://github.com/frknylmzkng/AccountingApp/releases/download/v1.0.0/SHA256SUMS.txt)
+
+1. Windows 64 bit bilgisayarda SQL Server Express LocalDB'nin kurulu olduğundan emin olun. .NET 10 çalışma bileşenleri ZIP'e dahildir; ayrıca .NET veya SDK kurmanız gerekmez.
+2. ZIP'in **tamamını** bir klasöre çıkarın; yalnızca EXE dosyasını taşımayın. Güncelleme yapıyorsanız önce açık uygulamayı kapatın.
+3. Veritabanınızı aşağıdaki uygun yöntemle hazırlayın, ardından `WinFormsApp2.exe` dosyasını açıp hesabınızla giriş yapın.
+
+**Mevcut veritabanını kullanıyorsanız:** Önceki `appsettings.json` bağlantı ayarınızı yeni klasöre taşıyın veya mevcut MDF yolunu bu dosyada belirtin. Varsayılan yol `%USERPROFILE%\Documents\Muhasebe2.mdf` dosyasıdır. Mevcut kullanıcı adı ve parolanızla giriş yapabilirsiniz; ilk kurulum komutlarını çalıştırmayın.
+
+**Yalnızca ilk kurulumda:** Paketi çıkardığınız klasörde PowerShell açıp şu komutları çalıştırın:
+
+```powershell
+Copy-Item .\database\appsettings.new-install.example.json .\appsettings.json
+.\AccountingApp.DatabaseSetup.exe --config .\appsettings.json
+```
+
+Kurulum aracının istediği ilk yönetici kullanıcı adını, parolayı ve parola tekrarını girin. Sabit başlangıç parolası yoktur. Kurulum tamamlanınca `WinFormsApp2.exe` dosyasını açın. Ayrıntılar: [veritabanı kurulumu](database/README.md) ve [kullanım kılavuzu](docs/KULLANIM_VE_TEST.md).
+
 Güncel paket: `artifacts\releases\localdb-startup-fix\WinFormsApp2.exe`. Kullanıcının açık onayıyla mevcut veritabanı doğrulanmış yedek alınarak yükseltildi. Personel, izin, tutar ve hesap özetleri korundu; rol ve açılış bakiyeleri doğrulandı. Masaüstündeki **Muhasebe - Güncel** kısayolu bu paketi açar. LocalDB kapalıyken, doğrudan Windows Explorer oturumundan giriş hazırlığı doğrulandı. Başlangıçta kurulu Microsoft SqlLocalDB aracı shell kullanmadan çağrılır; bu işlem veritabanını silmez veya yeniden oluşturmaz. Dağıtım klasörünün tamamı birlikte taşınır; paket .NET 10.0.13 çalışma bileşenlerini içerir. LocalDB veya güvenilir TLS sertifikası yapılandırılmış yerel SQL Express gerekir.
 
 Uygulama EXE yanındaki `appsettings.json` dosyasını kullanır. Varsayılan bağlantı, kullanıcının Documents/Muhasebe2.mdf dosyasıdır. Yönetici, Ayarlar ekranından başka JSON profilini doğrulayarak seçebilir; değişiklik yeniden girişte uygulanır. SQL Express örneği `database/appsettings.sqlexpress.example.json` içindedir. İlk kurulum ve mevcut veritabanı yükseltmesi farklı işlemlerdir; `database/README.md` ayrıntıları açıklar.
