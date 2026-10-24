@@ -1,6 +1,6 @@
 ﻿# Kullanım ve manuel test kılavuzu
 
-**Geçiş durumu:** Bu kılavuz yeni paket içindir. Gerçek veritabanı yükseltmesi ve masaüstü kısayolunun yeni pakete yönlendirilmesi açık kullanıcı onayını bekliyor. Kod ve izole paket testleri tamamlandı.
+**Geçiş durumu:** Kullanıcının açık onayıyla 24 Ekim 2026 tarihinde gerçek veritabanı yedeklenip yükseltildi ve masaüstü kısayolu yeni pakete yönlendirildi. Veri bütünlüğü ve gerçek veritabanıyla giriş hazırlığı doğrulandı. Mevcut kullanıcı adı ve parola kullanılabilir.
 
 Bu kılavuz, kaynak yeniden kullanım rehberini personel/izin/ödeme uygulamasına uyarlar. Stok, POS, müşteri puanı, tedarikçi ve lot modülleri eklenmez. Bunların işlem bütünlüğü, defter, hesaplama, tarih uyarısı ve taslak yöntemleri mevcut işlemlerde kullanılır.
 
