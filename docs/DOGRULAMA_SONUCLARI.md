@@ -1,6 +1,6 @@
 ﻿# Rehber uygulaması doğrulama sonuçları
 
-24 Ekim 2026; uygulama kodu yerel Git kaydı: 03a9dcf.
+24 Ekim 2026; rehber uyarlamasının başlangıç Git kaydı: 03a9dcf. Son LocalDB başlangıcı düzeltmesi: 260/260 test başarılı; ayrıntılar LOCALDB_GIRIS_DUZELTMESI.md dosyasındadır. Güncel paket artifacts/releases/localdb-startup-fix klasöründedir.
 
 - Tam master: **253 başarılı, 0 başarısız, 0 atlanan**; 15/15 alan. Uyarıları hata sayan Release derlemesi başarılı. Kanıt: artifacts/analysis/master-20261024-095439-621/master.trx, summary.json ve RAPOR.md.
 - Veritabanısız master: 185 başarılı, 0 başarısız, 0 atlanan. Kanıt: artifacts/analysis/master-20261024-100543-560/master.trx ve RAPOR.md.

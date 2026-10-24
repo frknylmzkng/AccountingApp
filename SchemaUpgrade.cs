@@ -11,6 +11,7 @@ internal static class SchemaUpgrade
 {
     public static async Task PrepareAsync(string connectionString, CancellationToken token = default, string? safetyFolder = null)
     {
+        await LocalDbRuntime.EnsureStartedAsync(connectionString, token).ConfigureAwait(false);
         // DbUp exposes a synchronous upgrade API. Keep this short, bounded schema operation off the UI thread.
         await Task.Run(() => Upgrade(connectionString, safetyFolder), token).ConfigureAwait(false);
         await Task.Run(() => new AdminStore(connectionString).MigrateLegacyPasswords(), token).ConfigureAwait(false);

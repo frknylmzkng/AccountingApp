@@ -39,6 +39,10 @@ namespace WinFormsApp2
 
             string message = exception is DatabaseConfigurationException configurationError
                 ? configurationError.Message
+                : exception is LocalDbStartupException startupError
+                ? startupError.Message
+                : exception is SqlException localDbError && localDbError.Number == -1983577846
+                ? "LocalDB veritabanı motoru başlatılamadı. Yeniden deneyin; sorun sürerse LocalDB kurulumunu kontrol edin."
                 : exception is SqlException certificateError && certificateError.Number == -2146893019
                 ? "SQL Server sertifikası bu bilgisayarda güvenilir değil. Sunucuda güvenilir bir TLS sertifikası yapılandırın veya mevcut LocalDB profilini kullanın."
                 : exception is SqlException sqlError && sqlError.Number == -2

@@ -13,12 +13,12 @@ public class GuideDatabaseTests
     private readonly UserSession admin = new("test-admin", UserRole.Admin);
     private PersonnelService Service => new(connection, admin);
     private static PersonnelDetails Person(long tc = 11111111111L, decimal amount = 100m) => new(tc, "Ada", "Test", "TR000000000000000000000000", amount);
-    private const string Master = @"Data Source=(LocalDB)\MSSQLLocalDB;Initial Catalog=master;Integrated Security=True;Encrypt=False;Pooling=False";
+    private static string Master => TestDatabaseServer.Master;
     [OneTimeSetUp]
     public async Task Create()
     {
         directory = Path.Combine(Path.GetTempPath(), "AccountingAppTests", "g" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
-        var settings = new DatabaseSettings(@"(LocalDB)\MSSQLLocalDB", name, Path.Combine(directory, "people.mdf"), 30);
+        var settings = new DatabaseSettings(TestDatabaseServer.Server, name, Path.Combine(directory, "people.mdf"), 30);
         new DatabaseInstaller(settings).Install(() => new("test-admin", "Test-only-password-123")); created = true; connection = settings.CreateConnectionString();
         await SchemaUpgrade.PrepareAsync(connection, safetyFolder: Path.Combine(directory, "upgrade-backup")); hash = PasswordHasher.Hash("Test-only-password-123");
     }
@@ -47,7 +47,7 @@ public class GuideDatabaseTests
     {
         string legacyName = "AccountingAppGuideRegression_" + Guid.NewGuid().ToString("N");
         string folder = Path.Combine(directory, "legacy"); Directory.CreateDirectory(folder);
-        var settings = new DatabaseSettings(@"(LocalDB)\MSSQLLocalDB", legacyName, Path.Combine(folder, "legacy.mdf"), 30);
+        var settings = new DatabaseSettings(TestDatabaseServer.Server, legacyName, Path.Combine(folder, "legacy.mdf"), 30);
         bool exists = false;
         try
         {

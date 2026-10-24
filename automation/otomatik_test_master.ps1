@@ -11,6 +11,10 @@ New-Item -ItemType Directory -Force -Path $taskReport, $taskScratch | Out-Null
 $taskDotnet = Join-Path $taskRoot 'dotnet.cmd'
 $taskSolution = Join-Path $taskRoot 'WinFormsApp2.sln'
 $taskExit = 0
+$taskEngine = 'AccountingAppTestEngine_' + [Guid]::NewGuid().ToString('N')
+$taskEngineCreated = $false
+$taskPreviousEngine = $env:ACCOUNTINGAPP_TEST_LOCALDB_INSTANCE
+$taskLocalDb = $null
 $taskSummary = [ordered]@{ Started = (Get-Date).ToString('o'); Full = [bool]$Full; DatabaseFree = [bool]$NoDatabase; Scratch = $taskScratch; Build = 'NotRun'; Tests = 'NotRun'; Areas = @() }
 Push-Location -LiteralPath $taskRoot
 try {
@@ -19,6 +23,18 @@ try {
     & $taskDotnet build $taskSolution -c Release --no-restore -p:TreatWarningsAsErrors=true
     if ($LASTEXITCODE -ne 0) { throw 'Derleme başarısız.' }
     $taskSummary.Build = 'Passed'
+    if (-not $NoDatabase) {
+        $taskSqlRoot = Join-Path $env:ProgramFiles 'Microsoft SQL Server'
+        $taskLocalDb = Get-ChildItem -LiteralPath $taskSqlRoot -Directory | Where-Object { $_.Name -match '^\d+$' } | Sort-Object { [int]$_.Name } -Descending | ForEach-Object { Join-Path $_.FullName 'Tools\Binn\SqlLocalDB.exe' } | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+        if (-not $taskLocalDb) { throw 'LocalDB test motoru aracı bulunamadı.' }
+        & $taskLocalDb create $taskEngine
+        if ($LASTEXITCODE -ne 0) { throw 'İzole test motoru oluşturulamadı.' }
+        $taskEngineCreated = $true
+        & $taskLocalDb start $taskEngine
+        if ($LASTEXITCODE -ne 0) { throw 'İzole test motoru başlatılamadı.' }
+        $env:ACCOUNTINGAPP_TEST_LOCALDB_INSTANCE = $taskEngine
+        $taskSummary.TestEngine = $taskEngine
+    }
     $taskFilter = 'TestCategory!=FullRestore'
     if ($Full) { $taskFilter = 'FullyQualifiedName~WinFormsApp2' }
     # FullRestore belongs to LocalDb too. A single condition also avoids cmd.exe interpreting '&' in PS 5.1.
@@ -56,6 +72,12 @@ try {
     }
 } catch { $taskSummary.Error = $_.Exception.Message; $taskExit = 1 }
 finally {
+    $env:ACCOUNTINGAPP_TEST_LOCALDB_INSTANCE = $taskPreviousEngine
+    if ($taskEngineCreated -and $taskEngine -match '^AccountingAppTestEngine_[0-9a-f]{32}$') {
+        & $taskLocalDb stop $taskEngine
+        & $taskLocalDb delete $taskEngine
+        if ($LASTEXITCODE -ne 0) { $taskSummary.EngineCleanup = 'Failed'; $taskExit = 1 } else { $taskSummary.EngineCleanup = 'Passed' }
+    }
     $taskSummary.Finished = (Get-Date).ToString('o')
     $taskEncoding = New-Object System.Text.UTF8Encoding($true)
     [IO.File]::WriteAllText((Join-Path $taskReport 'summary.json'), ($taskSummary | ConvertTo-Json -Depth 6), $taskEncoding)

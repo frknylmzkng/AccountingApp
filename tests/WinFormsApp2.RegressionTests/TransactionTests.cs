@@ -9,8 +9,7 @@ public class TransactionTests
 {
     // This fixture creates only its own GUID-named database; it never opens Muhasebe2.mdf.
     private readonly string databaseName = "AccountingAppRegression_" + Guid.NewGuid().ToString("N");
-    private const string MasterConnection =
-        @"Data Source=(LocalDB)\MSSQLLocalDB;Initial Catalog=master;Integrated Security=True;Encrypt=False;Pooling=False;Connect Timeout=30";
+    private static string MasterConnection => TestDatabaseServer.Master;
     private string connectionString = "";
     private bool databaseCreated;
     private PersonnelStore Store => new PersonnelStore(connectionString);

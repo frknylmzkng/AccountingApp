@@ -88,3 +88,5 @@ Kod, tam test, izole paket ve gerçek veritabanı geçişi tamamlandı. Kullanı
 - Gerçek DB ve kısayol: açık kullanıcı onayıyla tamamlandı. COPY_ONLY/CHECKSUM yedeği RESTORE VERIFYONLY ile doğrulandı. Mevcut veri özetleri korundu; roller, journal ve açılış bakiyeleri doğrulandı. Kısayol yeni Release sürümünü açar. Kanıt: artifacts/analysis/guide-production-status.json ve guide-approved-backup.json.
 - Paket güvenlik taraması: üç projede doğrudan/geçişli bilinen NuGet açığı bildirilmedi; artifacts/analysis/guide-package-audit.json.
 - Uzak CI ve fiziksel yazıcı: manuel/harici doğrulama; yapılmadı.
+
+Son giriş düzeltmesi (24 Ekim 2026): LocalDB kapalıyken gerçek Explorer oturumunda giriş hazırlığı başarılı, ardından Dashboard gözlendi. 260/260 test ve 15/15 alan başarılı. Test motoru her koşuda ayrı GUID örneğidir; açık kullanıcı motoru etkilenmez. Güncel kısayol artifacts/releases/localdb-startup-fix/WinFormsApp2.exe dosyasını açar. Ayrıntılar LOCALDB_GIRIS_DUZELTMESI.md dosyasındadır.

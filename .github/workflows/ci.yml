@@ -18,13 +18,13 @@ jobs:
           global-json-file: global.json
           cache: true
           cache-dependency-path: '**/packages.lock.json'
-      - name: Start isolated LocalDB test engine
+      - name: Verify LocalDB tools
         shell: pwsh
         run: |
           $engine = Get-ChildItem 'C:\Program Files\Microsoft SQL Server' -Filter SqlLocalDB.exe -Recurse | Select-Object -First 1 -ExpandProperty FullName
           if (-not $engine) { throw 'LocalDB is required for integration tests.' }
-          & $engine start MSSQLLocalDB
-          if ($LASTEXITCODE -ne 0) { throw 'LocalDB start failed.' }
+          & $engine versions
+          if ($LASTEXITCODE -ne 0) { throw 'LocalDB tools unavailable.' }
       - name: Build and run the complete suite, including disposable restore
         shell: powershell
         run: '& .\automation\otomatik_test_master.ps1 -Full'

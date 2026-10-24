@@ -9,7 +9,7 @@ namespace WinFormsApp2.RegressionTests;
 [TestFixture, Category("LocalDb"), NonParallelizable]
 public class DatabaseSetupTests
 {
-    private const string MasterConnection = @"Data Source=(LocalDB)\MSSQLLocalDB;Initial Catalog=master;Integrated Security=True;Encrypt=False;Pooling=False";
+    private static string MasterConnection => TestDatabaseServer.Master;
     private string directory = "";
     private DatabaseSettings settings = null!;
     private const string TestPassword = " Güçlü test şifresi 123! ";
@@ -21,7 +21,7 @@ public class DatabaseSetupTests
         string name = "AccountingAppSetupRegression_" + Guid.NewGuid().ToString("N");
         directory = Path.GetFullPath(Path.Combine(TestContext.CurrentContext.WorkDirectory, "SetupDatabases", "it's a test folder", name));
         Directory.CreateDirectory(directory);
-        settings = new DatabaseSettings(@"(LocalDB)\MSSQLLocalDB", name, Path.Combine(directory, "Test.mdf"), 15);
+        settings = new DatabaseSettings(TestDatabaseServer.Server, name, Path.Combine(directory, "Test.mdf"), 15);
     }
 
     [TearDown]
