@@ -1,0 +1,507 @@
+================================================================================
+YENIDEN KULLANIM REHBERI - Inventory Management System
+Tum yontemler, guvenlik yaklasimlari, mimari desenler ve tuzaklar
+Kaynak: C:\Users\FURKAN YILMAZ\Desktop\Inventory Management System
+Olusturma tarihi: 2026-10-23
+================================================================================
+
+ICINDEKILER
+  1. Guvenlik Katmani
+  2. Veritabani ve Migration
+  3. Mimari Katmanlar (Repository, UnitOfWork, Service)
+  4. UI/UX Katmani
+  5. Raporlama ve Disa Aktarim
+  6. Is Mantigi Servisleri
+  7. Test ve CI/CD
+  8. Yeni Projede Adim Adim Baslangic
+  9. Hizli Referans: Kopyalama Oncelik Sirasi
+  10. Dikkat Edilmesi Gereken Tuzaklar
+
+================================================================================
+1. GUVENLIK KATMANI
+================================================================================
+
+1.1 PBKDF2-SHA256 Parola Hashing (OWASP)
+--------------------------------------------------------------------------------
+Dosya: DbHelper.cs -> HashPassword / VerifyPassword
+NuGet: yok (System.Security.Cryptography dahili)
+
+KOD:
+  public static string HashPassword(string password)
+  {
+      byte[] salt = new byte[16];
+      using (var rng = new RNGCryptoServiceProvider()) rng.GetBytes(salt);
+      using (var pbkdf2 = new Rfc2898DeriveBytes(password, salt, 100000))
+      {
+          byte[] hash = pbkdf2.GetBytes(32);
+          return $"PBKDF2:{Convert.ToBase64String(salt)}:{Convert.ToBase64String(hash)}";
+      }
+  }
+
+  public static bool VerifyPassword(string password, string stored, out bool needsMigration)
+  {
+      needsMigration = false;
+      if (stored.StartsWith("PBKDF2:"))
+      {
+          var parts = stored.Split(':');
+          byte[] salt = Convert.FromBase64String(parts[1]);
+          byte[] hash = Convert.FromBase64String(parts[2]);
+          using (var pbkdf2 = new Rfc2898DeriveBytes(password, salt, 100000))
+          {
+              byte[] computed = pbkdf2.GetBytes(32);
+              return CryptographicEquals(computed, hash); // sabit zamanli karsilastirma
+          }
+      }
+      // eski duz metin / SHA-256 -> needsMigration = true, ilk giriste yukselt
+      needsMigration = true;
+      return stored == password; // veya eski SHA-256 dogrulama
+  }
+
+  private static bool CryptographicEquals(byte[] a, byte[] b)
+  {
+      if (a.Length != b.Length) return false;
+      int result = 0;
+      for (int i = 0; i < a.Length; i++) result |= a[i] ^ b[i];
+      return result == 0;
+  }
+
+YENIDEN KULLANIM:
+  - Her projede DbHelper veya SecurityHelper sinifina koyun.
+  - Rfc2898DeriveBytes .NET Framework 4.8'de mevcut.
+  - ASLA MD5 / SHA1 / tek tur SHA-256 kullanmayin.
+  - Geriye donuk uyumluluk: eski hash'li hesaplar ilk basarili giriste otomatik PBKDF2'ye yukseltilir.
+
+1.2 SQL Injection Korumasi
+--------------------------------------------------------------------------------
+  - Tum sorgularda SqlParameter kullanin; string birlestirme YASAK.
+  - Transaction icin SqlTransaction + using blogu.
+  - ROWLOCK, UPDLOCK ile eszamanli stok kilidi (concurrency).
+
+1.3 RBAC (Rol Tabanli Erisim)
+--------------------------------------------------------------------------------
+Dosya: CurrentUser.cs
+
+  public static class CurrentUser
+  {
+      public static int UserId { get; set; }
+      public static string Username { get; set; }
+      public static string Role { get; set; }
+      public static bool IsAdmin => Role == "Yonetici (Admin)";
+      public static bool IsCashier => Role == "Kasiyer";
+      public static bool IsWarehouse => Role == "Depo Gorevlisi";
+      public static bool IsLoggedIn => !string.IsNullOrEmpty(Username);
+  }
+
+Form acilisinda:
+  if (!CurrentUser.IsAdmin) btnAdminPanel.Visible = false;
+
+================================================================================
+2. VERITABANI VE MIGRATION
+================================================================================
+
+2.1 DbUp Migration Motoru
+--------------------------------------------------------------------------------
+NuGet: dbup-core, dbup-sqlserver
+
+  var upgrader = DeployChanges.To
+      .SqlDatabase(connectionString)
+      .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly())
+      .LogToConsole()
+      .Build();
+  var result = upgrader.PerformUpgrade();
+
+  - SQL betikleri SqlScripts\000-*.sql olarak proje icine gomulu (Embedded Resource).
+  - __MigrationJournal tablosu hangi betiklerin calistigini takip eder.
+  - Yeni sema degisikligi -> yeni numarali .sql dosyasi ekleyin, uygulama acilisinda otomatik calisir.
+
+2.2 Baglanti Dizesi Yonetimi
+--------------------------------------------------------------------------------
+  - App.config icinde iki profil (LocalDB + SQL Express).
+  - DbHelper.ActiveProfile ile calisma zamaninda gecis.
+  - |DataDirectory| belirteci DbHelper tarafindan otomatik olarak kullanicinin Belgelerim klasorune eslenir.
+
+================================================================================
+3. MIMARI KATMANLAR (Repository, UnitOfWork, Service)
+================================================================================
+
+3.1 Repository Pattern + Unit of Work
+--------------------------------------------------------------------------------
+Dosyalar: Data\IUnitOfWork.cs, Data\UnitOfWork.cs, Data\*Repository.cs
+
+  public interface IUnitOfWork : IDisposable
+  {
+      ProductRepository Products { get; }
+      CustomerRepository Customers { get; }
+      OrderRepository Orders { get; }
+      void Commit();
+  }
+
+  public class UnitOfWork : IUnitOfWork
+  {
+      private readonly SqlConnection _conn;
+      private SqlTransaction _trans;
+      public ProductRepository Products { get; }
+      public CustomerRepository Customers { get; }
+
+      public UnitOfWork(string connStr)
+      {
+          _conn = new SqlConnection(connStr);
+          _conn.Open();
+          _trans = _conn.BeginTransaction();
+          Products = new ProductRepository(_conn, _trans);
+          Customers = new CustomerRepository(_conn, _trans);
+      }
+      public void Commit() { _trans.Commit(); _trans = _conn.BeginTransaction(); }
+      public void Dispose() { _trans?.Rollback(); _conn?.Dispose(); }
+  }
+
+Kullanim:
+  using (var uow = new UnitOfWork(connStr))
+  {
+      uow.Products.Update(p);
+      uow.Commit();
+  }
+  // commit cagrilmazsa otomatik rollback
+
+3.2 Async DAL (UI Donmaz)
+--------------------------------------------------------------------------------
+Dosya: DbHelper.cs -> ExecuteQueryAsync, ExecuteNonQueryAsync, ExecuteScalarAsync
+
+  public static async Task<DataTable> ExecuteQueryAsync(string sql, SqlParameter[] pars, CancellationToken ct = default)
+  {
+      using (var conn = new SqlConnection(ConnectionString))
+      using (var cmd = new SqlCommand(sql, conn))
+      {
+          if (pars != null) cmd.Parameters.AddRange(pars);
+          await conn.OpenAsync(ct).ConfigureAwait(false);
+          using (var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false))
+          {
+              var dt = new DataTable();
+              dt.Load(reader);
+              return dt;
+          }
+      }
+  }
+
+Kural:
+  - .ConfigureAwait(false) her async cagrida.
+  - UI thread'de async void event handler, ic mantik Task / Task<T>.
+  - CancellationToken destegi; iptal durumunda kaynaklar temizlenir.
+
+3.3 Eszamanli Stok Kilidi (Concurrency)
+--------------------------------------------------------------------------------
+SQL:
+  UPDATE ProductTable SET ProdQty = ProdQty - @qty
+  WHERE ProdId = @id AND ProdQty >= @qty
+
+  - Etkilenen satir sayisi 0 ise -> stok yetersiz -> Rollback + kullanici uyarisi.
+
+================================================================================
+4. UI/UX KATMANI
+================================================================================
+
+4.1 UIThemeHelper (Modern WinForms Tema Motoru)
+--------------------------------------------------------------------------------
+Dosya: UIThemeHelper.cs (~25 KB)
+
+Ozellikler:
+  - ApplyFormTheme(Form, ThemeMode) -> Light/Dark palet
+  - ApplyModernGridStyle(DataGridView) -> DoubleBuffered, 36px baslik, zebra satirlar
+  - Win32 ReleaseCapture + SendMessage WM_NCLBUTTONDOWN ile suruklenebilir baslik cubugu
+  - EM_SETCUEBANNER ile yer tutucu metin (Cue Banner)
+  - 3 bolgeli Status Bar (kullanici/rol, ipucu, canli saat)
+  - Klavye kisayollari (Esc, F1, F2, F5, Delete)
+
+Yeniden kullanim:
+  - Dosyayi kopyalayin.
+  - Program.cs'de Application.EnableVisualStyles() + SetCompatibleTextRenderingDefault(false).
+
+4.2 Dark Mode Persist
+--------------------------------------------------------------------------------
+  // Settings.settings -> UserScope: InventoryIMS.Theme (string: "Light"/"Dark")
+  Properties.Settings.Default.InventoryIMS_Theme = mode.ToString();
+  Properties.Settings.Default.Save();
+
+4.3 GridSettingsService (Kolon Kaliciligi)
+--------------------------------------------------------------------------------
+Dosya: Services\GridSettingsService.cs
+
+  public static void Save(DataGridView grid, string formName)
+  {
+      var state = new GridState
+      {
+          Columns = grid.Columns.Cast<DataGridViewColumn>()
+              .Select(c => new ColumnState { Name = c.Name, Width = c.Width, DisplayIndex = c.DisplayIndex, Visible = c.Visible })
+              .ToList()
+      };
+      var json = JsonConvert.SerializeObject(state);
+      File.WriteAllText(Path.Combine(AppData, "gridsettings.json"), json);
+  }
+
+  - Form Load'da Load(grid, formName), Closing'de Save(grid, formName).
+  - NuGet: Newtonsoft.Json.
+
+4.4 Cue Banner (Placeholder)
+--------------------------------------------------------------------------------
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+  private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, string lParam);
+  private const int EM_SETCUEBANNER = 0x1501;
+  public static void SetCueBanner(TextBox tb, string text)
+      => SendMessage(tb.Handle, EM_SETCUEBANNER, 0, text);
+
+================================================================================
+5. RAPORLAMA VE DISA AKTARIM
+================================================================================
+
+5.1 ExcelExportService (ClosedXML)
+--------------------------------------------------------------------------------
+NuGet: ClosedXML (net462)
+
+  public static void ExportDataTableToXlsx(DataTable dt, string filePath, string title)
+  {
+      using (var wb = new XLWorkbook())
+      {
+          var ws = wb.Worksheets.Add(dt, title);
+          ws.Row(1).Style.Font.Bold = true;
+          ws.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#1A2434");
+          ws.Row(1).Style.Font.FontColor = XLColor.White;
+          // zebra, borders, number formats...
+          wb.SaveAs(filePath);
+      }
+  }
+
+Ozellikler:
+  - Baslik alani (lacivert), zebra deseni, para formati (#,##0.00 TL)
+  - Excel SUM formullu toplam satirlari
+  - UseShellExecute = true ile acma
+
+5.2 CsvHelper (UTF-8 BOM)
+--------------------------------------------------------------------------------
+  public static void ExportToCsv(DataTable dt, string filePath)
+  {
+      using (var sw = new StreamWriter(filePath, false, new UTF8Encoding(true))) // BOM
+      {
+          sw.WriteLine(string.Join(";", dt.Columns.Cast<DataColumn>().Select(c => $"\"{c.ColumnName}\"")));
+          foreach (DataRow r in dt.Rows)
+              sw.WriteLine(string.Join(";", r.ItemArray.Select(v => $"\"{v}\"")));
+      }
+  }
+
+5.3 ReceiptPrinter (GDI+ Termal/A4 Fis)
+--------------------------------------------------------------------------------
+Dosya: ReceiptPrinter.cs -> PrintDocument + PrintPreviewDialog
+  - 80mm termal ve A4 sayfa destegi
+  - Logo (PNG), QR kod (QRCoder NuGet), veresiye borc ozeti, IBAN
+  - UseShellExecute = true ile Process.Start (Win32Exception onleme)
+
+5.4 Z-Raporu (80mm Termal)
+--------------------------------------------------------------------------------
+Dosya: ZReportPrinter.cs -> GDI+ cizim motoru
+  - Cift imza alani, kasa farki renk kodlamasi
+
+================================================================================
+6. IS MANTIGI SERVISLERI
+================================================================================
+
+6.1 WAC (Agirlikli Ortalama Maliyet)
+--------------------------------------------------------------------------------
+  public static decimal CalculateWAC(decimal currentQty, decimal currentCost,
+                                    decimal incomingQty, decimal incomingCost)
+  {
+      if (currentQty + incomingQty == 0) return incomingCost;
+      if (currentQty <= 0) return incomingCost; // negatif stokta yeni fiyata gec
+      return ((currentQty * currentCost) + (incomingQty * incomingCost)) / (currentQty + incomingQty);
+  }
+
+6.2 Audit Logging
+--------------------------------------------------------------------------------
+  public static void LogAction(string action, string module, string detail)
+  {
+      // AuditLogTable INSERT + NLog.Info
+      // action: "POS Satis", "Iade", "Stok Duzenleme", "Giris" vb.
+  }
+
+6.3 Otomatik Yedekleme (FIFO 14 + Aynalama)
+--------------------------------------------------------------------------------
+  - %APPDATA%\InventoryIMS\backups\ birincil dizin
+  - 24 saat gecince arka planda (Task.Run) .bak alinir
+  - Son 14 yedek saklanir, eskiler FIFO ile silinir
+  - Ikincil aynalama (USB/OneDrive) + cift katmanli config (Settings + Registry)
+
+6.4 Musteri Sadakat Puani
+--------------------------------------------------------------------------------
+  public static int CalculateEarnedPoints(decimal paidAmount, decimal earnRate)
+      => (int)Math.Floor(paidAmount / 100m * earnRate);
+  // 1 puan = 1 TL; perakende musteri (CustId=0) puan kazanamaz
+
+6.5 Tedarikci Cari Hesabi (Ledger)
+--------------------------------------------------------------------------------
+  - SupplierTable.Balance (borc bakiyesi)
+  - SupplierPaymentTable (odeme kayitlari)
+  - Mal kabulde atomik borc artisi (Balance += TotalCost)
+  - Yuruyen bakiye (running balance) ile hesap ekstresi
+
+6.6 Cycle Count + FEFO Lot Takibi
+--------------------------------------------------------------------------------
+  - LotTable (LotNo, ExpiryDate, Qty) + StockMovementTable.LotId
+  - FEFO uyarisi: suresi gecmis -> kirmizi uyari; 30 gun kalan -> sari oneri
+  - Seans bazli atomik onay (tek transaction, ROWLOCK/UPDLOCK)
+
+6.7 Parked Sale (Sepet Bekletme)
+--------------------------------------------------------------------------------
+  - ParkedSaleTable (ItemsJson ile sepeti serialize)
+  - F6 ile bekleme, F7 ile geri yukleme
+  - Stok kontrolu + fiyat farki uyarisi
+
+================================================================================
+7. TEST VE CI/CD
+================================================================================
+
+7.1 NUnit Test Projesi
+--------------------------------------------------------------------------------
+NuGet: NUnit 3.13.3, NUnit3TestAdapter 4.5.0, Microsoft.NET.Test.Sdk 17.6.0
+
+  - [Category("DB")] ile DB-bagimli testler izole edilir
+  - CI'da --TestCaseFilter:"TestCategory!=DB" ile atlanir
+
+7.2 GitHub Actions CI/CD
+--------------------------------------------------------------------------------
+Dosya: .github/workflows/ci.yml
+
+  - uses: microsoft/setup-msbuild@v2
+  - uses: nuget/setup-nuget@v2
+  - uses: darenm/setup-vstest@v1.2
+  - run: nuget restore
+  - run: msbuild ... /p:Configuration=Release
+  - run: vstest.console.exe ... --TestCaseFilter:"TestCategory!=DB"
+  - uses: actions/upload-artifact@v4  (TRX + Release ikilileri)
+
+7.3 Master Test Otomasyon Scripti
+--------------------------------------------------------------------------------
+Dosya: automation\otomatik_test_master.ps1
+
+  - MSBuild -> NUnit -> 15 entegrasyon suitesi -> gap-filler fazlar -> rapor
+  - -Full bayragi ile yikici restore testi
+  - %TEMP%\antigravity_ims\ kurali (Norton false-positive onleme)
+
+================================================================================
+8. YENI PROJEDE ADIM ADIM BASLANGIC
+================================================================================
+
+Minimum Viable Stack (tek hafta):
+  1. Proje olustur: .NET Framework 4.8 WinForms + SQL Server LocalDB
+  2. DbHelper.cs kopyala: PBKDF2, ExecuteQuery/NonQuery/Scalar (sync + async), Backup/Restore, LastError
+  3. CurrentUser.cs + Login formu (PBKDF2 migration ile)
+  4. App.config baglanti dizesi + Settings.settings
+  5. NLog.config + Program.cs global exception handlers
+  6. UIThemeHelper.cs kopyala + ApplyFormTheme cagrilari
+
+2. Hafta - Mimari:
+  7. Models\ POCO siniflari
+  8. Data\ Repository'ler + IUnitOfWork/UnitOfWork
+  9. Services\ (OrderService, CostCalculationService, CustomerLoyaltyService)
+  10. DbUp migration betikleri (SqlScripts\000-*.sql)
+
+3. Hafta - Ozellikler:
+  11. POS + sepet + stok kilidi
+  12. Musteri cari + tahsilat
+  13. Mal kabul + WAC
+  14. Audit log + yedekleme
+
+4. Hafta - Polish & Test:
+  15. GridSettingsService + CsvHelper + ExcelExportService
+  16. ReceiptPrinter + Z-Raporu
+  17. NUnit test projesi + GitHub Actions
+  18. Master test scripti + manuel test kilavuzu
+
+================================================================================
+9. HIZLI REFERANS: KOPYALAMA ONCELIK SIRASI
+================================================================================
+
+| Oncelik | Dosya/Modul | Bagimlilik |
+|---------|-------------|------------|
+| P0 | DbHelper.cs (PBKDF2 + SQL helpers) | Yok |
+| P0 | CurrentUser.cs (RBAC) | Yok |
+| P0 | NLog.config + Program.cs handlers | NLog NuGet |
+| P0 | UIThemeHelper.cs | Yok (pure Win32 P/Invoke) |
+| P1 | Data\UnitOfWork.cs + Repositories | DbHelper |
+| P1 | Services\OrderService.cs | Repositories + UoW |
+| P1 | DbUp migration altyapisi | dbup-sqlserver NuGet |
+| P2 | GridSettingsService.cs | Newtonsoft.Json |
+| P2 | CsvHelper.cs | Yok |
+| P2 | ExcelExportService.cs | ClosedXML NuGet |
+| P2 | ReceiptPrinter.cs | System.Drawing.Printing |
+| P3 | Test projesi + CI/CD | NUnit, VSTest |
+| P3 | Master test scripti | PowerShell 5.1+ |
+
+================================================================================
+10. DIKKAT EDILMESI GEREKEN TUZAKLAR
+================================================================================
+
+1. Norton/AV false-positive:
+   - Test betikleri %TEMP%\antigravity_ims\ altinda calissin.
+   - Desktop'a .ps1 yazilmamali.
+   - Klasor istisnasi (Settings -> Virus -> Scratch klasoru) + Fidye Yazilimi Koruma izinli uygulama listesine powershell.exe.
+
+2. Encoding:
+   - Turkce karakterler icin dosyalar UTF-8 BOM ile kaydedilmeli.
+   - PowerShell 5.1 ANSI okur; BOM olmadan Türkçe stringler bozulur.
+   - Write tool sonrasi BOM ekle: [System.IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding($true))).
+
+3. MSBuild secimi:
+   - vswhere SSMS'in MSBuild'ini secebilir.
+   - Filtrele: Where-Object { $_ -notmatch "SQL Server Management Studio" }
+   - Alternatif: Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022\*\MSBuild\Current\Bin\MSBuild.exe"
+
+4. Start-Process -ArgumentList:
+   - Bosluklu yollar bolunur ("C:\Users\FURKAN" -> hata).
+   - Cozum: & powershell.exe -ExecutionPolicy Bypass -File "path" (tek string).
+
+5. vstest.console /nologo gecersiz:
+   - Bu parametreyi kullanmayin; sadece /logger:trx;LogFileName=... kullanin.
+
+6. DbHelper statik constructor:
+   - DataDirectory ayari uygulama acilisinda yapilmali (LocalDB attach path).
+   - Settings.Default.Reload() ile kullanici ayarlari yuklenmeli.
+
+7. Transaction rollback:
+   - UnitOfWork.Dispose() commit cagrilmamissa otomatik rollback yapmali.
+   - try/catch icinde commit sonrasi Rollback cagrisi unutulmamali.
+
+8. Concurrency:
+   - Stok dusumunde AND ProdQty >= @qty kosulu + etkilenen satir kontrolu sart.
+   - ROWLOCK, UPDLOCK hint'leri kullanilmali.
+
+9. Norton istisnasi yapilmadan test calistirma:
+   - Antivirus kapatilmamali; klasor istisnasi + izinli uygulama listesi yeterli.
+
+10. Git binary kalintilari:
+    - .pfx ve buyuk jpg dosyalari repodan silinmeli.
+    - Silme sirasi: Resources.resx data entry -> Resources.Designer.cs property -> .csproj satiri -> sonra dosya silme.
+    - Aradaki derleme dogrulamasi zorunlu (yoksa build kirilir).
+
+11. Prompt siralamasi:
+    - Antigravity'ye her seferinde YALNIZCA bir prompt ver.
+    - Her prompt sonrasi derle (Ctrl+Shift+B), manuel smoke test yap, git commit et.
+    - P0 -> P1 -> P2 -> P3 sirasina uy.
+
+12. UI thread guvenligi:
+    - async void sadece event handler'larda.
+    - Tum ic mantik Task / Task<T> dondurmeli.
+    - .ConfigureAwait(false) her async cagrida.
+
+================================================================================
+SON NOT
+================================================================================
+Bu rehber, "Inventory Management System" projesinde (C# .NET Framework 4.8 /
+WinForms / SQL Server LocalDB) 28 prompt boyunca olgunlastirilmis tum
+yontemleri, guvenlik yaklasimlarini, mimari desenleri, UI/UX bilesenlerini,
+raporlama araclari, test altyapisini ve CI/CD pipeline'ini kapsamaktadir.
+
+Her bilesen bagimsiz olarak kopyalanabilir; bagimliliklar tablosu (Bolum 9)
+kopyalama sirasini belirler. Tuzaklar (Bolum 10) yeni projede ayni hatalari
+tekrarlamamak icin mutlaka okunmalidir.
+
+Gelistirici: Furkan Yilmaz
+GitHub: https://github.com/frknylmzkng/Inventory-Management-System
+================================================================================
