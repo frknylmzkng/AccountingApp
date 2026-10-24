@@ -1,0 +1,48 @@
+name: Windows build, regression and release package
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - name: Start isolated LocalDB test engine
+        shell: pwsh
+        run: |
+          $engine = Get-ChildItem 'C:\Program Files\Microsoft SQL Server' -Filter SqlLocalDB.exe -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $engine) { throw 'LocalDB is required for integration tests.' }
+          & $engine start MSSQLLocalDB
+          if ($LASTEXITCODE -ne 0) { throw 'LocalDB start failed.' }
+      - name: Build and run the complete suite, including disposable restore
+        shell: powershell
+        run: '& .\automation\otomatik_test_master.ps1 -Full'
+      - name: Publish self-contained package
+        shell: pwsh
+        run: |
+          .\dotnet.cmd publish WinFormsApp2.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=10.0.13 -p:PublishTrimmed=false -p:RestoreLockedMode=true -p:TreatWarningsAsErrors=true -o artifacts\releases\guide
+          if ($LASTEXITCODE -ne 0) { throw 'Application publish failed.' }
+          .\dotnet.cmd publish tools\DatabaseSetup\AccountingApp.DatabaseSetup.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=10.0.13 -p:PublishTrimmed=false -p:RestoreLockedMode=true -p:TreatWarningsAsErrors=true -o artifacts\releases\guide
+          if ($LASTEXITCODE -ne 0) { throw 'Setup publish failed.' }
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: test-evidence
+          path: artifacts/analysis/master-*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: AccountingApp-win-x64
+          path: artifacts/releases/guide/
+          if-no-files-found: error

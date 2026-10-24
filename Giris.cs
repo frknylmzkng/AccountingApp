@@ -7,20 +7,25 @@ namespace WinFormsApp2
         private bool busy;
         private bool closed;
         private bool credentialsPrepared;
+        private UserSession? authenticatedUser;
+        private bool useAccountService;
 
         internal LoginFailure? LastFailure { get; private set; }
 
         internal event EventHandler<LoginSucceededEventArgs>? LoginSucceeded;
 
         public Giris() : this(
-            () => Task.Run(() => new AdminStore(AppDatabase.ConnectionString).MigrateLegacyPasswords()),
-            (username, password) => Task.Run(() => new AdminStore(AppDatabase.ConnectionString).Authenticate(username, password))) { }
+            () => SchemaUpgrade.PrepareAsync(AppDatabase.ConnectionString),
+            (_, _) => Task.FromResult(false)) { useAccountService = true; }
 
         internal Giris(Func<Task> prepareCredentials, Func<string, string, Task<bool>> authenticate)
         {
             this.prepareCredentials = prepareCredentials;
             this.authenticate = authenticate;
             InitializeComponent();
+            username_txt.PlaceholderText = "Kullanıcı adı";
+            password_txt.PlaceholderText = "Şifre";
+            AppTheme.Apply(this);
             AcceptButton = giris_btn;
             Load += Giris_Load;
         }
@@ -82,11 +87,12 @@ namespace WinFormsApp2
             statusLabel.Text = "Giriş doğrulanıyor…";
             try
             {
-                bool authenticated = await authenticate(username.Trim(), password);
+                authenticatedUser = useAccountService ? await new AccountService(AppDatabase.ConnectionString).AuthenticateAsync(username.Trim(), password) : null;
+                bool authenticated = useAccountService ? authenticatedUser != null : await authenticate(username.Trim(), password);
                 if (!CanContinue) return false;
                 password_txt.Clear();
                 if (authenticated)
-                    LoginSucceeded?.Invoke(this, new LoginSucceededEventArgs(username.Trim()));
+                    LoginSucceeded?.Invoke(this, new LoginSucceededEventArgs(username.Trim(), authenticatedUser?.Role ?? UserRole.Admin));
                 else
                     statusLabel.Text = "Kullanıcı adı veya şifre hatalı. Bilgilerinizi kontrol edin.";
                 return authenticated;

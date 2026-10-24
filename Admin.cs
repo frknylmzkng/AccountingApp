@@ -1,87 +1,34 @@
-using System.Data;
+namespace WinFormsApp2;
 
-namespace WinFormsApp2
+public partial class Admin : SessionForm
 {
-    public partial class Admin : SessionForm
+    private readonly ComboBox role = new() { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(175, 213), Width = 185 };
+    public Admin()
     {
-        public Admin()
-        {
-            InitializeComponent();
-            RecordSelection.Configure(adminView);
-        }
-
-        private string connectionString => AppDatabase.ConnectionString;
-
-        private void Admin_Load(object sender, EventArgs e) => LoadData();
-
-        private void back_Click(object sender, EventArgs e)
-        {
-            RequestBack();
-        }
-
-        public void Veriler()
-        {
-            DataTable table = new AdminStore(connectionString).GetUsers();
-            table.Columns["username"]!.ReadOnly = true;
-            adminView.DataSource = table;
-            adminView.ClearSelection();
-        }
-
-        private void ekle_btn_Click(object sender, EventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(txtUsername.Text) || string.IsNullOrWhiteSpace(txtPassword.Text))
-            {
-                MessageBox.Show("Kullanıcı adı ve şifre boş olamaz!");
-                return;
-            }
-            if (txtPassword.Text.Length < 6)
-            {
-                MessageBox.Show("Şifre en az 6 karakter olmalıdır!");
-                return;
-            }
-
-            ApplyChange(() => new AdminStore(connectionString).Add(
-                txtUsername.Text.Trim(), txtPassword.Text), "Yönetici başarıyla eklendi!");
-        }
-
-        private void sil_btn_Click(object sender, EventArgs e)
-        {
-            if (!RecordSelection.TryGetKey(adminView, "username", out string username))
-            {
-                MessageBox.Show("Lütfen silmek için listeden bir admin seçin!");
-                return;
-            }
-            if (MessageBox.Show($"{username} kullanıcısını silmek istediğinize emin misiniz?",
-                "Silme Onayı", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
-                return;
-
-            ApplyChange(() => new AdminStore(connectionString).Delete(username), "Admin başarıyla silindi!");
-        }
-
-        private void ApplyChange(Action change, string successMessage)
-        {
-            try { change(); }
-            catch (Exception ex)
-            {
-                MessageBox.Show("İşlem tamamlanamadı: " + ex.Message);
-                return;
-            }
-
-            txtUsername.Clear();
-            txtPassword.Clear();
-            MessageBox.Show(successMessage);
-            LoadData(changeSaved: true);
-        }
-
-        private void LoadData(bool changeSaved = false)
-        {
-            try { Veriler(); }
-            catch (Exception ex)
-            {
-                MessageBox.Show((changeSaved ? "İşlem kaydedildi ancak liste yenilenemedi: " :
-                    "Veri yükleme hatası: ") + ex.Message);
-            }
-        }
+        InitializeComponent(); RecordSelection.Configure(adminView);
+        role.Items.AddRange(["Yönetici", "Personel sorumlusu", "Görüntüleyici"]); role.SelectedIndex = 0;
+        Controls.Add(new Label { Text = "Yetki", Location = new Point(45, 216), AutoSize = true }); Controls.Add(role);
+        EditControls.AddRange([ekle_btn, sil_btn]); RefreshAction = LoadDataAsync;
+        DeleteAction = () => sil_btn_Click(this, EventArgs.Empty);
+    }
+    private async void Admin_Load(object sender, EventArgs e) { if (!PreviewOnly) await LoadDataAsync(); }
+    private void back_Click(object sender, EventArgs e) => RequestBack();
+    private async Task LoadDataAsync() => await RunOperationAsync(async token =>
+    {
+        var data = await new AccountService(AppDatabase.ConnectionString).ListAsync(User, token);
+        if (!IsDisposed && !token.IsCancellationRequested) { adminView.DataSource = data; adminView.ClearSelection(); }
+    });
+    private async void ekle_btn_Click(object sender, EventArgs e)
+    {
+        string username = txtUsername.Text, password = txtPassword.Text; UserRole selected = (UserRole)role.SelectedIndex;
+        bool done = await RunOperationAsync(token => new AccountService(AppDatabase.ConnectionString).AddAsync(User, username, password, selected, token), "Hesap eklendi.");
+        if (!IsDisposed) txtPassword.Clear();
+        if (done && !IsDisposed) { txtUsername.Clear(); await LoadDataAsync(); }
+    }
+    private async void sil_btn_Click(object sender, EventArgs e)
+    {
+        if (!RecordSelection.TryGetKey(adminView, "username", out string username)) return;
+        if (MessageBox.Show(this, $"{username} hesabı silinsin mi?", "Hesap sil", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        if (await RunOperationAsync(token => new AccountService(AppDatabase.ConnectionString).DeleteAsync(User, username, token), "Hesap silindi.") && !IsDisposed) await LoadDataAsync();
     }
 }
-

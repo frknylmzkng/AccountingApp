@@ -11,6 +11,8 @@ namespace WinFormsApp2
             InitializeComponent();
             RecordSelection.Configure(calisanView);
             ResetLeaveInputs();
+            EditControls.AddRange([ekle_btn, edit_btn, sil_btn, izinKaydet_btn]);
+            RefreshAction = () => LoadDataAsync(); ClearAction = Temizle; DeleteAction = () => sil_btn_Click(this, EventArgs.Empty);
         }
 
         private string connectionString => AppDatabase.ConnectionString;
@@ -22,15 +24,10 @@ namespace WinFormsApp2
             RequestBack();
         }
 
-        public void Veriler()
+        public async Task VerilerAsync(CancellationToken token = default)
         {
-            using var connection = new SqlConnection(connectionString);
-            using var adapter = new SqlDataAdapter(@"
-                SELECT C.TC, C.AD, C.SOYAD, C.IBAN, C.PARA,
-                       I.IZINBASLANGIC, I.IZINBITIS, I.IzinSuresi
-                FROM Calisan C LEFT JOIN izinler I ON C.TC = I.TC", connection);
-            var table = new DataTable();
-            adapter.Fill(table);
+            var table = await People.ListAsync(PersonnelGroup.General, token);
+            if (IsDisposed || token.IsCancellationRequested) return;
             table.Columns["TC"]!.ReadOnly = true;
             bindingRecords = true;
             try
@@ -42,15 +39,14 @@ namespace WinFormsApp2
             ResetLeaveInputs();
         }
 
-        private void ekle_btn_Click(object sender, EventArgs e)
+        private async void ekle_btn_Click(object sender, EventArgs e)
         {
             PersonnelDetails? person = ReadInputs();
             if (person == null) return;
-            ApplyChange(() => new PersonnelStore(connectionString).Add(PersonnelGroup.General,
-                person), "Çalışan eklendi. İzin kaydı oluşturulmadı.");
+            await ApplyChangeAsync(token => People.SaveAsync(PersonnelGroup.General, person, true, token), "Çalışan eklendi. İzin kaydı oluşturulmadı.");
         }
 
-        private void edit_btn_Click(object sender, EventArgs e)
+        private async void edit_btn_Click(object sender, EventArgs e)
         {
             if (!RecordSelection.TryGetTc(calisanView, out long selectedTc))
             {
@@ -65,11 +61,11 @@ namespace WinFormsApp2
 
             PersonnelDetails? person = ReadInputs();
             if (person == null) return;
-            ApplyChange(() => new PersonnelStore(connectionString).Update(PersonnelGroup.General,
-                person), "Çalışan bilgileri güncellendi. İzin tarihleri korundu.");
+            decimal originalAmount = RecordSelection.OriginalAmount(calisanView);
+            await ApplyChangeAsync(token => People.SaveAsync(PersonnelGroup.General, person, false, token, originalAmount), "Çalışan bilgileri güncellendi. İzin tarihleri korundu.");
         }
 
-        private void izinKaydet_btn_Click(object sender, EventArgs e)
+        private async void izinKaydet_btn_Click(object sender, EventArgs e)
         {
             if (!RecordSelection.TryGetTc(calisanView, out long tc))
             {
@@ -88,13 +84,13 @@ namespace WinFormsApp2
                 return;
             }
 
-            ApplyChange(() => new PersonnelStore(connectionString).SaveLeave(tc, leave),
+            await ApplyChangeAsync(token => People.SaveLeavesAsync([(tc, leave)], token),
                 "Seçilen personelin izin tarihleri kaydedildi. Personel bilgileri değiştirilmedi.");
         }
 
         private void temizle_btn_Click(object sender, EventArgs e) => Temizle();
 
-        private void sil_btn_Click(object sender, EventArgs e)
+        private async void sil_btn_Click(object sender, EventArgs e)
         {
             if (!RecordSelection.TryGetTc(calisanView, out long tc))
             {
@@ -105,7 +101,7 @@ namespace WinFormsApp2
                 "Silme Onayı", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                 return;
 
-            ApplyChange(() => new PersonnelStore(connectionString).Delete(PersonnelGroup.General, tc),
+            await ApplyChangeAsync(token => People.DeleteAsync(PersonnelGroup.General, tc, token),
                 "Çalışan ve izin bilgileri silindi!");
         }
 
@@ -121,32 +117,16 @@ namespace WinFormsApp2
             return person;
         }
 
-        private void ApplyChange(Action change, string successMessage)
+        private async Task ApplyChangeAsync(Func<CancellationToken, Task> change, string successMessage)
         {
-            try { change(); }
-            catch (Exception ex)
-            {
-                MessageBox.Show("İşlem tamamlanamadı: " + ex.Message);
-                return;
-            }
-
-            // Only a committed operation clears the input or reports success.
+            if (!await RunOperationAsync(change, successMessage) || IsDisposed) return;
             Temizle();
-            MessageBox.Show(successMessage);
-            LoadData(changeSaved: true);
+            await LoadDataAsync();
         }
 
-        private void LoadData(bool changeSaved = false)
-        {
-            try { Veriler(); }
-            catch (Exception ex)
-            {
-                MessageBox.Show((changeSaved ? "İşlem kaydedildi ancak liste yenilenemedi: " :
-                    "Liste yüklenemedi: ") + ex.Message);
-            }
-        }
+        private async Task LoadDataAsync() => await RunOperationAsync(VerilerAsync);
 
-        private void Genel_Load(object sender, EventArgs e) => LoadData();
+        private async void Genel_Load(object sender, EventArgs e) { if (!PreviewOnly) await LoadDataAsync(); }
 
         private void calisanView_SelectionChanged(object? sender, EventArgs e)
         {
@@ -165,7 +145,7 @@ namespace WinFormsApp2
                 MoneyInput.Format(Convert.ToDecimal(record["PARA"], CultureInfo.InvariantCulture));
             dtpBaslangic.Value = record["IZINBASLANGIC"] is DateTime start ? start : DateTime.Today;
             dtpBitis.Value = record["IZINBITIS"] is DateTime end ? end : DateTime.Today;
-            dtpBaslangic.Enabled = dtpBitis.Enabled = izinKaydet_btn.Enabled = true;
+            dtpBaslangic.Enabled = dtpBitis.Enabled = izinKaydet_btn.Enabled = Session == null || User.CanEdit;
             izinDurumLabel.Text = $"İzin hedefi: {tc}\nTarihler yalnızca İZNİ KAYDET ile kaydedilir.";
         }
 
@@ -174,6 +154,12 @@ namespace WinFormsApp2
             dtpBaslangic.Value = dtpBitis.Value = DateTime.Today;
             dtpBaslangic.Enabled = dtpBitis.Enabled = izinKaydet_btn.Enabled = false;
             izinDurumLabel.Text = "İzin kaydetmek için listeden personel seçin.";
+        }
+
+        protected override void RefreshEditState()
+        {
+            bool selected = Session?.CanEdit == true && RecordSelection.TryGetTc(calisanView, out _);
+            dtpBaslangic.Enabled = dtpBitis.Enabled = izinKaydet_btn.Enabled = selected;
         }
 
         private void Temizle()

@@ -1,52 +1,87 @@
-# Yeniden kullanım rehberi uygulama takibi
+﻿# Yeniden kullanım rehberi uygulama takibi
 
-Kapsam kararı (kullanıcı, 24 Ekim 2026): **Mevcut işlevlere uyarla.** Yeni bir perakende/stok uygulaması kurulmayacak; rehberin yöntemleri personel, izin ve ödeme takibine uygulanacak. Kaynak rehberin kopyası `yeniden-kullanim-kaynak-rehberi.txt` dosyasındadır. Her başlık aşağıda izlenir; tamamlanmamış satır tamamlandı sayılmaz.
+Kullanıcı kapsam kararı (24 Ekim 2026): **Mevcut işlevlere uyarla.** Kaynak rehber `yeniden-kullanim-kaynak-rehberi.txt` olarak korunmuştur. Stok/POS/müşteri/tedarikçi modüllerinin teknik yöntemleri personel, izin ve ödeme alanına uygulanmıştır.
 
-Mevcut .NET 10, PBKDF2-HMAC-SHA256/600.000 yineleme, hash göçü, parametrik SQL ve veri bütünlüğü regresyonları korunur. Rehberdeki eski sürümler, SHA-1 kullanan eski PBKDF2 kurucu örneği, açık metne geri düşme, UI await'lerinde ConfigureAwait(false) ve antivirüs istisnaları aynen kopyalanmaz. Kullanıcı arayüzü await'leri UI bağlamına döner; DAL/servis await'leri bağlam yakalamaz. Güvenlik yazılımı ayarları değiştirilmez.
+.NET 10, güncel paketler ve mevcut PBKDF2-HMAC-SHA256/600.000 yineleme korunur. Rehberdeki SHA-1 varsayılanlı eski kurucu, açık metin parola fallback'i, UI await'inde ConfigureAwait(false), eski .NET/test sürümleri ve antivirüs istisnaları kopyalanmaz. Eşdeğer işlevler güvenli ve mevcut platforma uygun yöntemlerle uygulanır.
 
-| Rehber maddesi | Bu projedeki karşılığı | Durum / kanıt |
+| Madde | Uygulama / kanıt | Durum |
 |---|---|---|
-| 1.1 | Güçlü PBKDF2, salt, sabit zamanlı kontrol, kontrollü eski parola göçü | Mevcut; son regresyonda tekrar doğrulanacak |
-| 1.2 | Parametreli sorgular, güvenli tanımlayıcılar, transaction ve kilitler | Mevcut; yeni DAL işlemleri de kapsanacak |
-| 1.3 | Yönetici / personel sorumlusu / görüntüleyici; servis ve ekran izinleri | Bekliyor |
-| 2.1 | DbUp, gömülü sürümlü betikler, otomatik güvenli şema yükseltme | Bekliyor |
-| 2.2 | Geriye uyumlu JSON + LocalDB / SQL Express profilleri, DataDirectory, kontrollü profil geçişi | Bekliyor |
-| 3.1 | Modeller, repository, bir işlem için UnitOfWork; commit yoksa rollback | Bekliyor |
-| 3.2 | Gerçek async SQL, cancellation, kaynak temizliği, yanıt veren UI | Bekliyor |
-| 3.3 | Koşullu/atomik bakiye düşümü ve eşzamanlı ödeme koruması | Bekliyor |
-| 4.1 | Ortak tema, modern grid, pencere sürükleme, durum çubuğu, erişilebilir klavye akışları | Bekliyor |
-| 4.2 | Kullanıcıya özel kalıcı açık/koyu tema | Bekliyor |
-| 4.3 | Kolon genişliği/sırası/görünürlüğünü saklama | Bekliyor |
-| 4.4 | .NET TextBox.PlaceholderText ile yer tutucular | Bekliyor |
-| 5.1 | ClosedXML, biçimli tutar raporu, SUM satırı, güvenli dosya açma | Bekliyor |
-| 5.2 | UTF-8 BOM, noktalı virgül, doğru CSV kaçışları ve formül koruması | Bekliyor |
-| 5.3 | A4 / 80 mm personel ödeme fişi, logo/QR, izin/ödeme bilgileri | Bekliyor |
-| 5.4 | POS Z raporu yerine günlük ödeme kapanış raporu ve çift imza | Bekliyor |
-| 6.1 | Ayrı decimal hesaplama servisi; personel tutar toplamı/ağırlıklı ortalama | Bekliyor |
-| 6.2 | Transaction'a bağlı denetim kaydı + kişisel veri içermeyen NLog | Bekliyor |
-| 6.3 | 24 saat aralıklı yedekleme, 14 yedek, isteğe bağlı aynalama, çift ayar kaynağı, doğrulanmış restore | Bekliyor |
-| 6.4 | Müşteri puanı yerine saf ve sınanmış izin günü/tutar hesaplamaları; hayali izin hakedişi üretilmez | Bekliyor |
-| 6.5 | Tedarikçi carisi yerine personel ödeme defteri ve yürüyen bakiye | Bekliyor |
-| 6.6 | Lot/FEFO yerine tarih sıralı izin uyarıları ve atomik izin planı onayı | Bekliyor |
-| 6.7 | Sepet yerine personel/izin formu taslaklarını F6/F7 ile güvenle bekletme/geri yükleme | Bekliyor |
-| 7.1 | Güncel NUnit; izole DB testleri ve DB'siz test filtresi | Mevcut; yeni testlerle genişletilecek |
-| 7.2 | .NET 10 Windows GitHub Actions, TRX ve Release artifact'leri | Bekliyor |
-| 7.3 | Master test scripti, 15 uyarlanmış entegrasyon alanı, rapor, -Full izole restore testi | Bekliyor |
-| 8.1–8.6 | Proje, DB helper, oturum, ayarlar, global hata kaydı, tema | Korumalı modern uyarlama; P0 |
-| 8.7–8.10 | POCO, repository/UoW, servis, migration | P1 |
-| 8.11–8.14 | POS/borç/mal kabul yerine ödeme akışı, bakiye, hesaplamalar, audit/yedek | P1–P2 |
-| 8.15–8.18 | Grid/export, yazdırma, CI, otomasyon ve manuel kılavuz | P2–P3 |
-| 9 P0→P3 | Sıra: güvenlik/tema temeli → veri/mimari → rapor/iş akışları → otomasyon | Bu sıra izlenecek |
-| 10.1 / 10.9 | İzole test çalışma klasörü; antivirüs kapatma/istisna yok | Mevcut yaklaşım korunacak |
-| 10.2 | PowerShell 5.1 betiklerinde UTF-8 BOM, Türkçe round-trip testi | Mevcut; yeni dosyalarda da uygulanacak |
-| 10.3 | Yerel/pinlenmiş dotnet SDK; SSMS MSBuild seçilmez | Mevcut |
-| 10.4 | Boşluklu yollarda güvenli argüman aktarımı | Mevcut; yeni otomasyon testi |
-| 10.5 | Geçerli dotnet test / TRX komutları; geçersiz vstest /nologo yok | Mevcut |
-| 10.6 | Ayarlar/DataDirectory ilk DB erişiminden önce hazırlanır | Bekliyor |
-| 10.7 | Dispose/DisposeAsync ile tamamlanmamış işlemi geri alma | Bekliyor |
-| 10.8 | Koşullu güncelleme + etkilenen satır sayısı | Bekliyor |
-| 10.10 | Kaynakta .pfx/büyük JPG envanteri; bağlı kaynakları bozmadan temizlik | Tarama: temizlenecek dosya bulunmadı |
-| 10.11 | Her aşama derleme/test/smoke ve yerel sürüm kaydı; uzak depoya otomatik gönderim yok | Başlangıç kaydı hazırlanıyor |
-| 10.12 | async void yalnızca olay işleyicileri; iç API'ler Task, UI thread kontrolü | Bekliyor |
+| 1.1 | PasswordHasher, AdminStore kontrollü göç; PasswordHasherTests ve TransactionTests | Mevcut güçlü uygulama korundu |
+| 1.2 | Parametrik SQL; SqlValues, SqlUnitOfWork, UPDLOCK/HOLDLOCK/ROWLOCK; audit/izin/personel rollback testleri | Uygulandı |
+| 1.3 | Models/UserSession, AccountService, context ve ekran kontrolleri; rol ve son yönetici testleri | Uygulandı |
+| 2.1 | SchemaUpgrade + gömülü database/upgrades; DbUp, SHA256 journal, transaction ve önce doğrulanmış yedek | Uygulandı |
+| 2.2 | DatabaseSettings, SettingsForm; LocalDB/yerel SQL Express JSON; DataDirectory; doğrulama ve çıkışla profil geçişi | Uygulandı; Express canlı deneme TLS hatasıyla sınırlı |
+| 3.1 | Models, Data/PersonnelRepository, IUnitOfWork/SqlUnitOfWork, Services/PersonnelService | Uygulandı |
+| 3.2 | OpenAsync/ExecuteReaderAsync/ReadAsync/ExecuteNonQueryAsync/CommitAsync; token, DisposeAsync, UI busy/close koruması | Uygulandı |
+| 3.3 | PayAsync: koşullu bakiye azaltımı, etkilenen satır, kilit, benzersiz request ID; yarış ve tekrar testleri | Uygulandı |
+| 4.1 | AppTheme + SessionForm: çift tampon grid, 36px başlık, zebra, standart sürüklenebilir başlık, üç durum alanı, klavye | Uygulandı |
+| 4.2 | UserPreferences: kullanıcı JSON ve HKCU, açık/koyu tema; kalıcılık/fallback testi | Uygulandı |
+| 4.3 | GridPreferences: genişlik/sıra/görünürlük JSON, Kolonlar menüsü; düzen round-trip testi | Uygulandı |
+| 4.4 | TextBox.PlaceholderText; P/Invoke gerektirmeyen .NET eşdeğeri | Uygulandı |
+| 5.1 | ReportExport.Excel, ClosedXML; başlık/zebra/kenarlık/TL/SUM; workbook doğrulaması | Uygulandı |
+| 5.2 | ReportExport.Csv; UTF-8 BOM, noktalı virgül, quote/newline kaçışı ve formül koruması | Uygulandı |
+| 5.3 | PaymentPrinting, A4/80mm PrintDocument/Preview; PNG logo, QR referansı, maskeli TC/IBAN, bakiye ve izin | Uygulandı; fiziksel yazıcı testi manuel |
+| 5.4 | Günlük ödeme kapanışı: beyan/kayıt farkı, renk ve çift imza; POS yerine personel ödeme raporu | Uygulandı |
+| 6.1 | Calculations.WeightedAverage decimal servisi; özet ekranında personel başına ortalama | Uyarlanarak uygulandı |
+| 6.2 | Aynı transaction içinde AuditLog; NLog yalnızca sabit olay/tür/kod; audit-failure rollback ve gizlilik testi | Uygulandı |
+| 6.3 | BackupService, yönetici oturumunda 24 saat kontrolü, son 14, aynalama, JSON/HKCU, VERIFYONLY, güvenlik yedeği ve restore | Uygulandı; izole gerçek restore sınaması |
+| 6.4 | Sadakat puanı yerine Calculations.LeaveDays, sınanmış takvim günü ve decimal tutar hesabı | Uyarlanarak uygulandı; hayali hakediş kuralı eklenmedi |
+| 6.5 | PaymentLedger: açılış/tutar farkı/ödeme/iptal/kapanış, yürüyen bakiye, silmeden bağımsız tarihçe | Uyarlanarak uygulandı |
+| 6.6 | Summary tarih sıralı 30 günlük kırmızı/sarı izin uyarısı; LeavePlanForm atomik plan onayı | Uyarlanarak uygulandı |
+| 6.7 | F6/F7 DPAPI taslak; kullanıcı/DB/ekran kapsamı, kimliği yeniden bulma, değişmiş bakiye uyarısı ve güncel tutarı koruma | Uyarlanarak uygulandı |
+| 7.1 | NUnit 5, güncel adapter/TestSdk; LocalDb kategori ve DB'siz filtre; eski regresyon + Guide testleri | Uygulandı |
+| 7.2 | .github/workflows/ci.yml: Windows, SDK pini, kilitli restore, tam test, TRX/rapor ve Release artifact | Hazır; uzak GitHub koşusu yapılmadı |
+| 7.3 | automation/otomatik_test_master.ps1: 15 alan gerçek TRX eşlemesi, JSON/MD, -NoDatabase ve -Full | Uygulandı; 15 alan başarılı |
 
-CI dosyası hazırlamak, uzak GitHub çalıştırması yapılmış sayılmaz. SQL Express profilinin bağlantı testi yerel kurulum varsa yapılır; kurulu olmayan servis veya fiziksel yazıcıyla yapılan testler otomatik başarı olarak raporlanmaz. Gerçek kullanıcı veritabanına restore testi uygulanmaz.
+## Bölüm 8: 18 adımın tek tek karşılığı
+
+| Adım | Karşılık |
+|---|---|
+| 8.1 Proje | Mevcut .NET 10 WinForms, global.json ve dotnet.cmd korundu |
+| 8.2 DB helper | DatabaseSettings/AppDatabase, SqlValues, güçlü PasswordHasher |
+| 8.3 Oturum | AccountingApplicationContext + değişmez UserSession ve rol |
+| 8.4 Ayarlar | Kullanıcı JSON + HKCU, bağlantı profili, tema, yedek ve logo |
+| 8.5 Hata yakalama | Program global handler'ları, LoginDiagnostics ve NLog |
+| 8.6 Tema | AppTheme + SessionForm ortak araç/durum çubuğu |
+| 8.7 Modeller | Models/UserSession.cs ve Models/Personnel.cs |
+| 8.8 Repository/UoW | Data/PersonnelRepository.cs ve Data/SqlUnitOfWork.cs |
+| 8.9 Servisler | PersonnelService, AccountService, Calculations, BackupService |
+| 8.10 Migration | DbUp + database/upgrades ve ayrı temel kurulum journal'ı |
+| 8.11 POS/sepet/kilit | Personel ödeme kaydı, işlem kimliği ve atomik bakiye düşümü |
+| 8.12 Cari/tahsilat | Personel PaymentLedger ve yönetici ödeme iptali |
+| 8.13 Mal kabul/WAC | Planlanan tutar farkı, açılış bakiyesi ve decimal ağırlıklı ortalama |
+| 8.14 Audit/yedek | Transaction audit + NLog + yedek/aynalama/restore |
+| 8.15 Grid/export | Kolon ayarı, CSV ve ClosedXML |
+| 8.16 Yazdırma | A4/80mm ödeme fişi ve günlük ödeme kapanışı |
+| 8.17 Test/CI | NUnit regresyonları ve Windows GitHub Actions |
+| 8.18 Otomasyon/kılavuz | Master PS betiği ve KULLANIM_VE_TEST.md |
+
+Bölüm 9 sırası: güvenlik/tema temeli → repository/UoW/migration/servisler → rapor/ödeme/izin/yedek → test/CI/otomasyon. Başlangıç kaynak kaydı yerel Git'e alındı; uygulama ve son kanıtlar ayrı yerel kayıtlara alınır. Uzak depoya push yapılmaz.
+
+## Bölüm 10: tuzakların tek tek karşılığı
+
+| Tuzak | Uygulanan yöntem |
+|---|---|
+| 10.1 | Test için ayrı TEMP/AccountingAppTests/GUID alanı; güvenlik yazılımına dokunma yok |
+| 10.2 | PowerShell 5.1 dosyaları UTF-8 BOM; Türkçe dosya/içerik round-trip sınaması |
+| 10.3 | global.json ve yerel dotnet.cmd; SSMS MSBuild'i kullanılmaz |
+| 10.4 | Boşluklu yollar ayrı argüman; NUnit sınırında normalize edilen çalışma yolu |
+| 10.5 | Geçerli dotnet test/TRX; desteklenmeyen vstest /nologo yok |
+| 10.6 | Program açılışında DataDirectory; ilk DB çağrısından önce kullanıcı profilini yükleme |
+| 10.7 | Commit edilmemiş UoW dispose'da rollback; commit sonrası rollback yok; rollback hatası asıl hatayı maskelemez |
+| 10.8 | PARA>=amount, affected-row kontrolü, kilit ve idempotent request ID |
+| 10.9 | AV kapatma, klasör istisnası veya powershell.exe allowlist ekleme yapılmaz |
+| 10.10 | Kaynak taramasında .pfx/büyük JPG bulunmadı; veri/yedek/taslak/derleme çıktıları Git dışında |
+| 10.11 | Başlangıç kaydı, uyarıları hata sayan build, özellik ve tam regresyon, ekran render ve yerel sürüm kayıtları |
+| 10.12 | async void yalnızca olaylarda, iç API Task; DAL ConfigureAwait(false), UI await bağlamı korunur |
+
+## Doğrulama durumu
+
+Son tam koşu ve paket kanıtları tamamlanınca aşağıdaki satırlar kesin sonuçla güncellenecek. Kodun hazır olması, uzak CI veya fiziksel yazıcı kontrolünün yapılmış olduğu anlamına gelmez.
+
+- Özellik testi: 28/28 başarılı (önceki ara koşu; son koşu daha geniştir).
+- Tam master koşu: 253/253 başarılı, 0 başarısız, 0 atlanan; 15/15 alan. Kanıt: artifacts/analysis/master-20261024-095439-621/master.trx ve RAPOR.md.
+- Açık/koyu ekran render: 8 ekran × 2 tema, 16 görüntü; alan görünürlüğü ve sınır testleri başarılı. Personel, ödeme, hesap ve ayar yerleşimleri incelendi. Kanıt: artifacts/analysis/ui-preview/.
+- Release paketi ve mevcut DB yükseltme/giriş hazırlığı smoke: BEKLENİYOR.
+- SQL Express gerçek bağlantı: sunucudaki güvenilmeyen TLS sertifikası nedeniyle başarısız; LocalDB bağlantısı korunur.
+- Uzak CI ve fiziksel yazıcı: manuel/harici doğrulama; yapılmadı.

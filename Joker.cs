@@ -10,6 +10,8 @@ namespace WinFormsApp2
         {
             InitializeComponent();
             RecordSelection.Configure(jokerView);
+            EditControls.AddRange([ekle_btn, edit_btn, sil_btn]);
+            RefreshAction = () => LoadDataAsync(); ClearAction = Temizle; DeleteAction = () => sil_btn_Click(this, EventArgs.Empty);
         }
 
         private string connectionString => AppDatabase.ConnectionString;
@@ -21,12 +23,10 @@ namespace WinFormsApp2
             RequestBack();
         }
 
-        public void Veriler()
+        public async Task VerilerAsync(CancellationToken token = default)
         {
-            using var connection = new SqlConnection(connectionString);
-            using var adapter = new SqlDataAdapter("SELECT TC, AD, SOYAD, IBAN, PARA FROM Joker", connection);
-            var table = new DataTable();
-            adapter.Fill(table);
+            var table = await People.ListAsync(PersonnelGroup.Joker, token);
+            if (IsDisposed || token.IsCancellationRequested) return;
             table.Columns["TC"]!.ReadOnly = true;
             bindingRecords = true;
             try
@@ -37,16 +37,15 @@ namespace WinFormsApp2
             finally { bindingRecords = false; }
         }
 
-        private void ekle_btn_Click(object sender, EventArgs e)
+        private async void ekle_btn_Click(object sender, EventArgs e)
         {
             PersonnelDetails? person = ReadInputs();
             if (person == null) return;
-            ApplyChange(() => new PersonnelStore(connectionString).Add(PersonnelGroup.Joker,
-                person),
+            await ApplyChangeAsync(token => People.SaveAsync(PersonnelGroup.Joker, person, true, token),
                 "Veriler eklendi!");
         }
 
-        private void edit_btn_Click(object sender, EventArgs e)
+        private async void edit_btn_Click(object sender, EventArgs e)
         {
             if (!RecordSelection.TryGetTc(jokerView, out long selectedTc))
             {
@@ -61,12 +60,12 @@ namespace WinFormsApp2
 
             PersonnelDetails? person = ReadInputs();
             if (person == null) return;
-            ApplyChange(() => new PersonnelStore(connectionString).Update(PersonnelGroup.Joker,
-                person),
+            decimal originalAmount = RecordSelection.OriginalAmount(jokerView);
+            await ApplyChangeAsync(token => People.SaveAsync(PersonnelGroup.Joker, person, false, token, originalAmount),
                 "Veri başarıyla güncellendi!");
         }
 
-        private void sil_btn_Click(object sender, EventArgs e)
+        private async void sil_btn_Click(object sender, EventArgs e)
         {
             if (!RecordSelection.TryGetTc(jokerView, out long tc))
             {
@@ -77,7 +76,7 @@ namespace WinFormsApp2
                 "Silme Onayı", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                 return;
 
-            ApplyChange(() => new PersonnelStore(connectionString).Delete(PersonnelGroup.Joker, tc),
+            await ApplyChangeAsync(token => People.DeleteAsync(PersonnelGroup.Joker, tc, token),
                 "Kayıt başarıyla silindi!");
         }
 
@@ -93,32 +92,16 @@ namespace WinFormsApp2
             return person;
         }
 
-        private void ApplyChange(Action change, string successMessage)
+        private async Task ApplyChangeAsync(Func<CancellationToken, Task> change, string successMessage)
         {
-            try { change(); }
-            catch (Exception ex)
-            {
-                MessageBox.Show("İşlem tamamlanamadı: " + ex.Message);
-                return;
-            }
-
-            // Only a committed operation clears the input or reports success.
+            if (!await RunOperationAsync(change, successMessage) || IsDisposed) return;
             Temizle();
-            MessageBox.Show(successMessage);
-            LoadData(changeSaved: true);
+            await LoadDataAsync();
         }
 
-        private void LoadData(bool changeSaved = false)
-        {
-            try { Veriler(); }
-            catch (Exception ex)
-            {
-                MessageBox.Show((changeSaved ? "İşlem kaydedildi ancak liste yenilenemedi: " :
-                    "Liste yüklenemedi: ") + ex.Message);
-            }
-        }
+        private async Task LoadDataAsync() => await RunOperationAsync(VerilerAsync);
 
-        private void Joker_Load(object sender, EventArgs e) => LoadData();
+        private async void Joker_Load(object sender, EventArgs e) { if (!PreviewOnly) await LoadDataAsync(); }
 
         private void jokerView_SelectionChanged(object? sender, EventArgs e)
         {

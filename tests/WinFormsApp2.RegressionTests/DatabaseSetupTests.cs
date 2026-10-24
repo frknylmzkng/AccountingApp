@@ -19,7 +19,7 @@ public class DatabaseSetupTests
     public void SelectIsolatedDatabase()
     {
         string name = "AccountingAppSetupRegression_" + Guid.NewGuid().ToString("N");
-        directory = Path.Combine(TestContext.CurrentContext.WorkDirectory, "SetupDatabases", "it's a test folder", name);
+        directory = Path.GetFullPath(Path.Combine(TestContext.CurrentContext.WorkDirectory, "SetupDatabases", "it's a test folder", name));
         Directory.CreateDirectory(directory);
         settings = new DatabaseSettings(@"(LocalDB)\MSSQLLocalDB", name, Path.Combine(directory, "Test.mdf"), 15);
     }

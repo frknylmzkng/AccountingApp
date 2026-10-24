@@ -1,6 +1,6 @@
-# Bağlantı ayarı ve veritabanı kurulumu
+﻿# Bağlantı ayarı ve veritabanı kurulumu
 
-Uygulama ve kurulum aracı aynı `appsettings.json` biçimini kullanır. Uygulama dosyayı EXE'nin yanından okur; kısayolun çalışma klasörü ayarı değiştirmez. Geçerli ayarlar işlem boyunca sabit tutulur. Ayarı değiştirdikten sonra uygulamayı yeniden başlatın. Ayar okunamazsa veya MDF bulunamazsa başka bir veritabanına sessizce geçilmez.
+Uygulama ve kurulum aracı aynı `appsettings.json` biçimini kullanır. Varsayılan dosya EXE yanındadır; kısayolun çalışma klasörü ayarı değiştirmez. Yönetici, Ayarlar ekranında başka bir JSON profilini doğrulayıp seçebilir; profil değişince oturum kapanır ve yeniden giriş gerekir. Transaction ortasında bağlantı değiştirilmez. Ayar okunamazsa veya LocalDB MDF'si bulunamazsa başka bir DB'ye sessizce geçilmez.
 
 ## Mevcut veritabanıyla kullanım
 
@@ -19,18 +19,20 @@ Dağıtılan varsayılan ayar, önceki sürümlerde kullanılan Documents/Muhase
 
 | Alan | Anlamı |
 |---|---|
-| Server | Yerel LocalDB örneği. SQL Server Express LocalDB kurulu olmalıdır. |
+| Server | Yerel LocalDB veya bu bilgisayardaki SQLEXPRESS örneği. |
 | Name | Yeni kurulumda seçilen veritabanı adı. Eski dosya adıyla otomatik attach edilen veritabanlarında null bırakılır. |
-| FilePath | MDF dosyasının yolu. `%USERPROFILE%` ve `%LOCALAPPDATA%` gibi Windows ortam değişkenleri açılır. Göreli yollar ayar dosyasının klasöründen çözülür. |
+| FilePath | LocalDB MDF yolu: ortam değişkenleri açılır, göreli yol profil klasöründen çözülür. DataDirectory Documents klasörüdür. SQL Express'te boş bırakılır; Name zorunludur. |
 | ConnectTimeoutSeconds | 1–120 saniye; belirtilmezse 30. |
 
 Windows kimliğiyle bağlantı ve zorunlu şifreleme kullanılır; sertifika doğrulaması açıktır. JSON dosyasına SQL kullanıcı adı/parolası veya ek bağlantı anahtarı konmaz. Alan isimleri örnektekiyle aynı olmalıdır.
 
-Mevcut MDF'yi kullanmak için yalnızca bu ayarın doğru dosyayı göstermesi yeterlidir. Yeni kurulum aracı, geçmiş sürümlerden kalan ve SchemaMigrations kaydı olmayan bir şemayı otomatik dönüştürmez.
+Mevcut MDF için yeni temel kurulum çalıştırılmaz. Giriş hazırlığı önce doğrulanmış yedek alır; ardından `upgrades/100-roles-audit-ledger.sql` gibi ek DbUp yükseltmelerini uygular. Var olan personel, izin, tutar ve hesaplar korunur. Mevcut tutarlar ödeme defterinin açılış bakiyesidir; mevcut hesaplar Yönetici olur. Eski DB'ye gerçekte uygulanmamış 001 baseline kaydı yazılmaz.
+
+SQL Express örneği `appsettings.sqlexpress.example.json` içindedir. SQL Server'ın güvenilir TLS sertifikası ve Windows hesabının DB/kurulum/yedek klasörü yetkileri gerekir. Bu bilgisayardaki Express denemesinde -2146893019 sertifika güven hatası görüldü; profil kodu hazırdır, sunucudaki TLS kurulumu ayrıca tamamlanmalıdır. Mevcut LocalDB çalışır. Sertifika denetimi kapatılmaz.
 
 ## Yeni bilgisayarda veya ayrı boş veritabanında ilk kurulum
 
-Dağıtım klasörünün tamamını kullanın. .NET çalışma bileşenleri ve kurulum EXE'si pakette bulunur; SDK veya sqlcmd kurulması gerekmez. LocalDB ayrıca kurulu olmalıdır.
+Dağıtım klasörünün tamamını kullanın. .NET çalışma bileşenleri ve kurulum EXE'si pakette bulunur; SDK veya sqlcmd kurulması gerekmez. LocalDB veya yapılandırılmış yerel SQL Express ayrıca gerekir. Express'te CREATE DATABASE sunucunun varsayılan veri dizinini kullanır; MDF attach yapılmaz.
 
 1. Dağıtım klasöründe PowerShell açın. `database/appsettings.new-install.example.json` dosyasını `appsettings.json` olarak kopyalayın. Bu adım yeni kurulum içindir; mevcut kullanım ayarını değiştirmek istemiyorsanız önceki bölümdeki dosyayı kullanın.
 2. `Database.Name` ve `Database.FilePath` değerlerini seçin. Örnek yeni veritabanını `%LOCALAPPDATA%\AccountingApp\AccountingApp.mdf` konumunda, `AccountingApp` adıyla oluşturur.
@@ -75,8 +77,16 @@ Proje kökünden:
 
 ```powershell
 .\dotnet.cmd restore WinFormsApp2.sln --locked-mode
-.\dotnet.cmd publish WinFormsApp2.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=10.0.13 -p:PublishTrimmed=false -p:RestoreLockedMode=true -o artifacts\releases\database-config
-.\dotnet.cmd publish tools\DatabaseSetup\AccountingApp.DatabaseSetup.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=10.0.13 -p:PublishTrimmed=false -p:RestoreLockedMode=true -o artifacts\releases\database-config
+.\dotnet.cmd publish WinFormsApp2.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=10.0.13 -p:PublishTrimmed=false -p:RestoreLockedMode=true -o artifacts\releases\guide
+.\dotnet.cmd publish tools\DatabaseSetup\AccountingApp.DatabaseSetup.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=10.0.13 -p:PublishTrimmed=false -p:RestoreLockedMode=true -o artifacts\releases\guide
 ```
 
 İki EXE aynı .NET/SQL bileşenlerini paylaşacak şekilde aynı klasöre yayımlanır. Paket klasörünü bütün olarak kullanın. Sürüm güncellerken mevcut appsettings.json ayarını yeni dağıtıma taşıyın; yeni kurulum örneğiyle değiştirmek veritabanı seçimini değiştirir.
+
+## Otomatik özellik yükseltmeleri ve bakım
+
+Gömülü upgrades betikleri DbUp ve dbo.__MigrationJournal ile izlenir. Journal betik adı SHA256 özeti içerir. Uygulanmış dosyayı değiştirmeyin; yeni numaralı dosya ekleyin. Betikler tek transaction içinde uygulanır ve önce doğrulanmış güvenlik yedeği alınır. Temel kurulum journal'ı dbo.SchemaMigrations bundan ayrıdır.
+
+Konsolda profil doğrulamak için AccountingApp.DatabaseSetup.exe --check --config appsettings.json; aynı profilin mevcut uygulama şemasını yükseltmek için --upgrade --config appsettings.json kullanılabilir. Bu komut parola istemez veya sıfırlamaz.
+
+Yedek, aynalama, geri yükleme ve manuel test adımları docs/KULLANIM_VE_TEST.md dosyasındadır.

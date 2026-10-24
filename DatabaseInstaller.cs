@@ -26,7 +26,7 @@ namespace WinFormsApp2
 
         public DatabaseInstaller(DatabaseSettings settings, IReadOnlyList<DatabaseMigration>? migrations = null)
         {
-            this.settings = settings;
+            this.settings = settings with { FilePath = settings.FilePath.Length == 0 ? "" : Path.GetFullPath(settings.FilePath) };
             this.migrations = migrations ?? LoadMigrations();
             if (this.migrations.Count == 0 || this.migrations.Any(m => m.Version < 1) ||
                 this.migrations.Select(m => m.Version).Distinct().Count() != this.migrations.Count)
@@ -148,11 +148,16 @@ namespace WinFormsApp2
             existing.Parameters.Add("@Name", SqlDbType.NVarChar, 128).Value = settings.Name!;
             if (existing.ExecuteScalar() is string existingFile)
             {
-                if (!string.Equals(Path.GetFullPath(existingFile), settings.FilePath, StringComparison.OrdinalIgnoreCase))
+                if (settings.FilePath.Length > 0 && !string.Equals(Path.GetFullPath(existingFile), Path.GetFullPath(settings.FilePath), StringComparison.OrdinalIgnoreCase))
                     throw new DatabaseSetupException("Database.Name başka bir dosyaya bağlı. Ad veya dosya ayarını düzeltin; mevcut veritabanına dokunulmadı.");
                 return false;
             }
 
+            if (settings.FilePath.Length == 0)
+            {
+                using var createDefault = new SqlCommand($"CREATE DATABASE {QuoteIdentifier(settings.Name!)}", master);
+                createDefault.ExecuteNonQuery(); return true;
+            }
             string logFile = Path.Combine(Path.GetDirectoryName(settings.FilePath)!,
                 Path.GetFileNameWithoutExtension(settings.FilePath) + "_log.ldf");
             if (File.Exists(settings.FilePath) || File.Exists(logFile))

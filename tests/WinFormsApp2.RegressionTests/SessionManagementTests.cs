@@ -362,7 +362,7 @@ public class SessionManagementTests
     [TestCase("button6", AppPage.Contact)]
     public void ActualDashboardButtonsRequestTheCorrectPage(string fieldName, AppPage expected)
     {
-        using var dashboard = new Dashboard { ShowInTaskbar = false, Opacity = 0 };
+        using var dashboard = new Dashboard { Session = new("admin", UserRole.Admin), ShowInTaskbar = false, Opacity = 0 };
         AppPage? requested = null;
         dashboard.PageRequested += (_, e) => requested = e.Page;
         dashboard.Show();
@@ -375,7 +375,7 @@ public class SessionManagementTests
     [Test]
     public void ActualDashboardShowsUsernameAndHasAWorkingLogoutButton()
     {
-        using var dashboard = new Dashboard { ShowInTaskbar = false, Opacity = 0 };
+        using var dashboard = new Dashboard { Session = new("admin", UserRole.Admin), ShowInTaskbar = false, Opacity = 0 };
         dashboard.SetUsername("admin");
         int logouts = 0;
         dashboard.LogoutRequested += (_, _) => logouts++;

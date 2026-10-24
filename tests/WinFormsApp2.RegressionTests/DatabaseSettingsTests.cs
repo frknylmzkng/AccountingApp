@@ -13,7 +13,7 @@ public class DatabaseSettingsTests
     [SetUp]
     public void CreateDirectory()
     {
-        directory = Path.Combine(TestContext.CurrentContext.WorkDirectory, "Configuration_" + Guid.NewGuid().ToString("N"));
+        directory = Path.GetFullPath(Path.Combine(TestContext.CurrentContext.WorkDirectory, "Configuration_" + Guid.NewGuid().ToString("N")));
         Directory.CreateDirectory(directory);
     }
 

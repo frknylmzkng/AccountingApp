@@ -38,12 +38,12 @@ namespace WinFormsApp2
             }
 
             DatabaseOptions? options = configuration?.Database;
-            if (options == null || string.IsNullOrWhiteSpace(options.Server) || string.IsNullOrWhiteSpace(options.FilePath))
+            if (options == null || string.IsNullOrWhiteSpace(options.Server))
                 throw new DatabaseConfigurationException("appsettings.json içindeki Database.Server ve Database.FilePath alanları gereklidir.");
             string server = options.Server.Trim();
-            if (!server.StartsWith(@"(LocalDB)\", StringComparison.OrdinalIgnoreCase) ||
-                server.Length <= @"(LocalDB)\".Length || server.Any(char.IsControl))
-                throw new DatabaseConfigurationException("Database.Server yerel bir LocalDB örneği olmalıdır.");
+            bool localDb = server.StartsWith(@"(LocalDB)\", StringComparison.OrdinalIgnoreCase) && server.Length > @"(LocalDB)\".Length;
+            bool express = new[] { @".\SQLEXPRESS", @"localhost\SQLEXPRESS", Environment.MachineName + @"\SQLEXPRESS" }.Contains(server, StringComparer.OrdinalIgnoreCase);
+            if ((!localDb && !express) || server.Any(char.IsControl)) throw new DatabaseConfigurationException("LocalDB veya bu bilgisayardaki SQL Express örneği gerekir.");
             string? name = string.IsNullOrWhiteSpace(options.Name) ? null : options.Name.Trim();
             if (name is { Length: > 128 } || name?.Any(char.IsControl) == true ||
                 new[] { "master", "model", "msdb", "tempdb" }.Contains(name, StringComparer.OrdinalIgnoreCase))
@@ -52,9 +52,15 @@ namespace WinFormsApp2
                 throw new DatabaseConfigurationException("Database.ConnectTimeoutSeconds 1 ile 120 arasında olmalıdır.");
 
             string filePath;
+            if (!localDb)
+            {
+                if (name == null || !string.IsNullOrWhiteSpace(options.FilePath)) throw new DatabaseConfigurationException("SQL Express için Name gerekir; FilePath boş olmalıdır.");
+                return new DatabaseSettings(server, name, "", options.ConnectTimeoutSeconds);
+            }
             try
             {
-                string expanded = Environment.ExpandEnvironmentVariables(options.FilePath);
+                if (string.IsNullOrWhiteSpace(options.FilePath)) throw new ArgumentException();
+                string expanded = Environment.ExpandEnvironmentVariables(options.FilePath.Replace("|DataDirectory|", Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), StringComparison.OrdinalIgnoreCase));
                 if (expanded.Contains('%'))
                     throw new ArgumentException();
                 filePath = Path.GetFullPath(expanded, Path.GetDirectoryName(Path.GetFullPath(configurationPath))!);
@@ -70,7 +76,7 @@ namespace WinFormsApp2
 
         public string CreateConnectionString(bool requireExistingFile = true)
         {
-            if (requireExistingFile && !File.Exists(FilePath))
+            if (requireExistingFile && FilePath.Length > 0 && !File.Exists(FilePath))
                 throw new DatabaseConfigurationException("Database.FilePath dosyası bulunamadı. Ayarı kontrol edin veya yeni veritabanı kurulumunu çalıştırın.");
             var builder = new SqlConnectionStringBuilder
             {
@@ -90,6 +96,7 @@ namespace WinFormsApp2
     {
         private static readonly object Gate = new();
         private static DatabaseSettings? settings;
+        public static void Reset() { lock (Gate) { SqlConnection.ClearAllPools(); settings = null; } }
 
         public static string ConnectionString
         {
@@ -100,7 +107,8 @@ namespace WinFormsApp2
                     // Freeze a valid configuration for this process; a failed read can be retried.
                     if (settings == null)
                     {
-                        DatabaseSettings loaded = DatabaseSettings.Load(Path.Combine(AppContext.BaseDirectory, "appsettings.json"));
+                        string path = UserPreferences.Load().DatabaseConfigurationPath;
+                        DatabaseSettings loaded = DatabaseSettings.Load(string.IsNullOrWhiteSpace(path) ? Path.Combine(AppContext.BaseDirectory, "appsettings.json") : path);
                         string connection = loaded.CreateConnectionString();
                         settings = loaded;
                         return connection;

@@ -39,6 +39,8 @@ namespace WinFormsApp2
 
             string message = exception is DatabaseConfigurationException configurationError
                 ? configurationError.Message
+                : exception is SqlException certificateError && certificateError.Number == -2146893019
+                ? "SQL Server sertifikası bu bilgisayarda güvenilir değil. Sunucuda güvenilir bir TLS sertifikası yapılandırın veya mevcut LocalDB profilini kullanın."
                 : exception is SqlException sqlError && sqlError.Number == -2
                 ? "Veritabanı zamanında yanıt vermedi. Yeniden deneyin."
                 : "Giriş işlemi tamamlanamadı. Yeniden deneyin; hata sürerse hata kodunu paylaşın.";

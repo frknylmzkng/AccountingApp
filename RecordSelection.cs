@@ -36,5 +36,10 @@ namespace WinFormsApp2
                 key.All(c => c >= '0' && c <= '9') &&
                 long.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out tc);
         }
+        public static decimal OriginalAmount(DataGridView grid)
+        {
+            if (grid.SelectedRows.Count != 1 || grid.SelectedRows[0].DataBoundItem is not DataRowView record || !record.Row.HasVersion(DataRowVersion.Original)) throw new InvalidOperationException("Personeli listeden yeniden seçin.");
+            object value = record.Row["PARA", DataRowVersion.Original]; return value == DBNull.Value ? 0 : Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+        }
     }
 }

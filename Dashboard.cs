@@ -10,6 +10,11 @@ namespace WinFormsApp2
         }
 
         internal void SetUsername(string username) => userLabel.Text = "Kullanıcı: " + username;
+        protected override void OnLoad(EventArgs e)
+        {
+            button4.Visible = Session?.Role == UserRole.Admin;
+            base.OnLoad(e);
+        }
 
         private void button4_Click(object sender, EventArgs e) => RequestPage(AppPage.Admin);
         private void button1_Click(object sender, EventArgs e) => RequestPage(AppPage.General);

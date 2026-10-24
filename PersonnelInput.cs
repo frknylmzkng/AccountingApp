@@ -28,6 +28,11 @@ namespace WinFormsApp2
             }
 
             string iban = ibanText.ToUpperInvariant().Replace(" ", "");
+            if (firstName.Trim().Length > 50 || lastName.Trim().Length > 50 || firstName.Any(char.IsControl) || lastName.Any(char.IsControl))
+            {
+                error = "Ad ve soyadı 1–50 karakter olarak, kontrol karakteri olmadan girin.";
+                return false;
+            }
             if (iban.Length < 16 || iban.Length > 34)
             {
                 error = "Geçersiz IBAN!";

@@ -5,24 +5,38 @@ using WinFormsApp2;
 Console.InputEncoding = Encoding.UTF8;
 Console.OutputEncoding = Encoding.UTF8;
 string configurationPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+string operation = "install";
 if (args.Length == 1 && args[0] == "--help")
 {
-    Console.WriteLine("AccountingApp.DatabaseSetup.exe [--config appsettings.json]");
+    Console.WriteLine("AccountingApp.DatabaseSetup.exe [--check | --upgrade] [--config appsettings.json]");
     return 0;
 }
 if (args.Length != 0)
 {
-    if (args.Length != 2 || args[0] != "--config")
+    int index = 0;
+    if (args[0] is "--check" or "--upgrade") { operation = args[0][2..]; index++; }
+    if (args.Length != index && (args.Length != index + 2 || args[index] != "--config"))
     {
         Console.Error.WriteLine("Kullanım: AccountingApp.DatabaseSetup.exe [--config appsettings.json]");
         return 2;
     }
-    configurationPath = args[1];
+    if (args.Length > index) configurationPath = args[index + 1];
 }
 
 try
 {
     DatabaseSettings settings = DatabaseSettings.Load(configurationPath);
+    if (operation == "check")
+    {
+        using var connection = new SqlConnection(settings.CreateConnectionString()); connection.Open();
+        using var command = new SqlCommand("SELECT CASE WHEN OBJECT_ID(N'dbo.Calisan') IS NOT NULL AND OBJECT_ID(N'dbo.admin') IS NOT NULL THEN 1 ELSE 0 END", connection);
+        if (Convert.ToInt32(command.ExecuteScalar()) != 1) throw new DatabaseSetupException("Bağlantı kuruldu ancak uygulama şeması bulunamadı.");
+        Console.WriteLine("Bağlantı ve temel uygulama şeması doğrulandı."); return 0;
+    }
+    if (operation == "upgrade")
+    {
+        await SchemaUpgrade.PrepareAsync(settings.CreateConnectionString()); Console.WriteLine("Şema ve güvenli giriş yükseltmesi tamamlandı; önceki veriler korundu."); return 0;
+    }
     Console.WriteLine("Veritabanı kurulumu kontrol ediliyor. Mevcut dosyalar veya hesaplar üzerine yazılmaz.");
     DatabaseSetupResult result = new DatabaseInstaller(settings).Install(() =>
     {
@@ -58,7 +72,7 @@ catch (ArgumentException)
 catch (Exception ex)
 {
     LoginFailure failure = LoginDiagnostics.Record(ex, "database-setup");
-    Console.Error.WriteLine("Kurulum tamamlanamadı. Hata kodu: " + failure.Code);
+    Console.Error.WriteLine(failure.Message + " Hata kodu: " + failure.Code);
     return 1;
 }
 
