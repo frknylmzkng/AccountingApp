@@ -77,11 +77,14 @@ Bölüm 9 sırası: güvenlik/tema temeli → repository/UoW/migration/servisler
 
 ## Doğrulama durumu
 
-Son tam koşu ve paket kanıtları tamamlanınca aşağıdaki satırlar kesin sonuçla güncellenecek. Kodun hazır olması, uzak CI veya fiziksel yazıcı kontrolünün yapılmış olduğu anlamına gelmez.
+Kod, tam test ve izole paket doğrulaması tamamlandı. Gerçek kullanıcı veritabanı geçişi otomatik onay tarafından durduruldu ve açık kullanıcı onayı bekleniyor. Kodun hazır olması, uzak CI veya fiziksel yazıcı kontrolünün yapılmış olduğu anlamına gelmez.
 
-- Özellik testi: 28/28 başarılı (önceki ara koşu; son koşu daha geniştir).
+- Veritabanısız master: 185/185 başarılı; artifacts/analysis/master-20261024-100543-560/. -NoDatabase PowerShell 5.1 altında uçtan uca doğrulandı.
+- Yeni rehber regresyonları: 41 test; önceki 212 regresyonla birlikte 253 test başarılı.
 - Tam master koşu: 253/253 başarılı, 0 başarısız, 0 atlanan; 15/15 alan. Kanıt: artifacts/analysis/master-20261024-095439-621/master.trx ve RAPOR.md.
 - Açık/koyu ekran render: 8 ekran × 2 tema, 16 görüntü; alan görünürlüğü ve sınır testleri başarılı. Personel, ödeme, hesap ve ayar yerleşimleri incelendi. Kanıt: artifacts/analysis/ui-preview/.
-- Release paketi ve mevcut DB yükseltme/giriş hazırlığı smoke: BEKLENİYOR.
+- Release: artifacts/releases/guide; .NET 10.0.13 self-contained. GUID adlı izole DB üzerinde kurulum, yükseltme, bağlantı ve giriş hazırlığı başarılı. Kanıt: artifacts/analysis/guide-release-smoke.json. Gerçek DB üzerinde bu işlem uygulanmadı.
 - SQL Express gerçek bağlantı: sunucudaki güvenilmeyen TLS sertifikası nedeniyle başarısız; LocalDB bağlantısı korunur.
+- Gerçek DB ve kısayol: değişmedi. Otomatik onay, mevcut kullanıcı veritabanında şema/veri dönüşümü için açık kullanıcı onayı istiyor. Kanıt: artifacts/analysis/guide-production-status.json.
+- Paket güvenlik taraması: üç projede doğrudan/geçişli bilinen NuGet açığı bildirilmedi; artifacts/analysis/guide-package-audit.json.
 - Uzak CI ve fiziksel yazıcı: manuel/harici doğrulama; yapılmadı.

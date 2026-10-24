@@ -1,8 +1,8 @@
-# AccountingApp
+﻿# AccountingApp
 
 .NET 10 Windows Forms uygulaması: personel, izin ve kalan ödeme tutarı takibi. Rehberdeki yöntemler mevcut işlevlere uyarlandı. Ayrıntılı madde eşlemesi `docs/REHBER_UYGULAMA_TAKIBI.md`, kullanım ve sınama adımları `docs/KULLANIM_VE_TEST.md` içindedir.
 
-Güncel paket: `artifacts\releases\guide\WinFormsApp2.exe`. Masaüstündeki **Muhasebe - Güncel** kısayolu bu paketi açar. Dağıtım klasörünün tamamı birlikte taşınır; paket .NET 10.0.13 çalışma bileşenlerini içerir. LocalDB veya güvenilir TLS sertifikası yapılandırılmış yerel SQL Express gerekir.
+Hazır yeni paket: `artifacts\releases\guide\WinFormsApp2.exe`. Gerçek veritabanı yükseltmesi otomatik onay tarafından durduruldu; açık kullanıcı onayı bekleniyor. Masaüstündeki **Muhasebe - Güncel** kısayolu bu nedenle hâlâ önceki database-config sürümünü açar. Yeni paket giriş hazırlığında şema yükselttiği için dağıtım geçişi onay sonrasında yapılmalıdır. Dağıtım klasörünün tamamı birlikte taşınır; paket .NET 10.0.13 çalışma bileşenlerini içerir. LocalDB veya güvenilir TLS sertifikası yapılandırılmış yerel SQL Express gerekir.
 
 Uygulama EXE yanındaki `appsettings.json` dosyasını kullanır. Varsayılan bağlantı, kullanıcının Documents/Muhasebe2.mdf dosyasıdır. Yönetici, Ayarlar ekranından başka JSON profilini doğrulayarak seçebilir; değişiklik yeniden girişte uygulanır. SQL Express örneği `database/appsettings.sqlexpress.example.json` içindedir. İlk kurulum ve mevcut veritabanı yükseltmesi farklı işlemlerdir; `database/README.md` ayrıntıları açıklar.
 

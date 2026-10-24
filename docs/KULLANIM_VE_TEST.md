@@ -1,4 +1,6 @@
-# Kullanım ve manuel test kılavuzu
+﻿# Kullanım ve manuel test kılavuzu
+
+**Geçiş durumu:** Bu kılavuz yeni paket içindir. Gerçek veritabanı yükseltmesi ve masaüstü kısayolunun yeni pakete yönlendirilmesi açık kullanıcı onayını bekliyor. Kod ve izole paket testleri tamamlandı.
 
 Bu kılavuz, kaynak yeniden kullanım rehberini personel/izin/ödeme uygulamasına uyarlar. Stok, POS, müşteri puanı, tedarikçi ve lot modülleri eklenmez. Bunların işlem bütünlüğü, defter, hesaplama, tarih uyarısı ve taslak yöntemleri mevcut işlemlerde kullanılır.
 

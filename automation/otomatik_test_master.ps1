@@ -21,7 +21,8 @@ try {
     $taskSummary.Build = 'Passed'
     $taskFilter = 'TestCategory!=FullRestore'
     if ($Full) { $taskFilter = 'FullyQualifiedName~WinFormsApp2' }
-    if ($NoDatabase) { $taskFilter = 'TestCategory!=LocalDb&TestCategory!=FullRestore' }
+    # FullRestore belongs to LocalDb too. A single condition also avoids cmd.exe interpreting '&' in PS 5.1.
+    if ($NoDatabase) { $taskFilter = 'TestCategory!=LocalDb' }
     $taskNunitDirectory = $taskScratch.Replace('\', '/')
     & $taskDotnet test $taskSolution -c Release --no-build --no-restore --filter $taskFilter --blame-hang-timeout 45s --logger 'trx;LogFileName=master.trx' --results-directory $taskReport -- "NUnit.WorkDirectory=$taskNunitDirectory"
     if ($LASTEXITCODE -ne 0) { throw 'Testler başarısız; TRX dosyasını inceleyin.' }
