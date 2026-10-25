@@ -51,31 +51,18 @@ namespace WinFormsApp2
                 chromeInitialized = true;
                 KeyPreview = true; FormBorderStyle = FormBorderStyle.Sizable; StartPosition = FormStartPosition.CenterScreen;
                 Size original = ClientSize;
-                var content = new Panel { Dock = DockStyle.Fill, AutoScroll = true, AutoScrollMinSize = original };
-                var existing = Controls.Cast<Control>().ToArray(); Controls.Clear(); content.Controls.AddRange(existing);
+                var existing = Controls.Cast<Control>().ToArray();
+                var content = new Panel { Dock = DockStyle.Fill, AutoScroll = true, AutoScrollMinSize = existing.Length == 1 && existing[0].Dock == DockStyle.Fill ? Size.Empty : original };
+                Controls.Clear(); content.Controls.AddRange(existing);
                 Controls.Add(content);
-                var tools = new ToolStrip { Dock = DockStyle.Top, GripStyle = ToolStripGripStyle.Hidden, Padding = new Padding(5), AutoSize = true };
-                void Tool(string label, Action action) { var button = new ToolStripButton(label); button.Click += (_, _) => action(); tools.Items.Add(button); }
-                if (ShowNavigationTools && CompactNavigation)
-                {
-                    if (Session?.MustChangePassword != true) Tool("Ana ekran", RequestBack);
-                    Tool("Çıkış", () => RequestLogout());
-                }
-                else if (ShowNavigationTools)
-                {
-                Tool("Ana ekran", RequestBack); Tool("Parolamı değiştir", () => RequestPage(AppPage.PasswordChange)); Tool("Yenile · F5", () => _ = RefreshScreenAsync());
-                Tool("Tema", () => { var p = UserPreferences.Load(); p.DarkTheme = !p.DarkTheme; p.Save(); AppTheme.Apply(this); });
-                Tool("Excel", () => Export(true)); Tool("CSV", () => Export(false)); Tool("Kolonlar", ShowColumns);
-                Tool("Ödemeler", () => RequestPage(AppPage.Payments)); Tool("İzin planı", () => RequestPage(AppPage.LeavePlan));
-                if (Session?.Role == UserRole.Admin) Tool("Ayarlar / yedek", () => RequestPage(AppPage.Settings));
-                Tool("Çıkış", () => RequestLogout());
-                }
-                if (ShowNavigationTools) Controls.Add(tools);
+                var tools = CreateNavigationMenu();
+                if (ShowNavigationTools) { Controls.Add(tools); MainMenuStrip = tools; }
                 var status = new StatusStrip { Dock = DockStyle.Bottom };
                 var who = new ToolStripStatusLabel(Session == null ? "Oturum yok" : $"{User.Username} · {User.RoleLabel}");
                 hint = new ToolStripStatusLabel("F1 yardım · F2 temizle · F5 yenile · Esc geri") { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
                 var time = new ToolStripStatusLabel(DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss")); status.Items.AddRange([who, hint, time]); Controls.Add(status);
                 ClientSize = new Size(original.Width, original.Height + (ShowNavigationTools ? tools.PreferredSize.Height : 0) + status.Height);
+                if (!ShowNavigationTools) tools.Dispose();
                 MinimumSize = new Size(Math.Min(Width, 800), Math.Min(Height, 600));
                 clock = new System.Windows.Forms.Timer { Interval = 1000 }; clock.Tick += (_, _) => time.Text = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss"); clock.Start();
                 foreach (var control in EditControls) control.Enabled = Session?.CanEdit == true;
@@ -83,6 +70,52 @@ namespace WinFormsApp2
                     grid.DataBindingComplete += (_, _) => GridPreferences.Restore(grid);
                 AppTheme.Apply(this);
             }
+        }
+
+        private MenuStrip CreateNavigationMenu()
+        {
+            var menu = new MenuStrip { Dock = DockStyle.Top, Padding = new Padding(4, 2, 4, 2), AutoSize = true };
+            ToolStripMenuItem Item(string text, Action action, Keys shortcut = Keys.None)
+            {
+                var item = new ToolStripMenuItem(text) { ShortcutKeys = shortcut };
+                item.Click += (_, _) => action(); return item;
+            }
+            if (!ShowNavigationTools) return menu;
+            if (CompactNavigation)
+            {
+                if (Session?.MustChangePassword != true) menu.Items.Add(Item("&Ana ekran", RequestBack));
+                menu.Items.Add(Item("Çı&kış", () => RequestLogout())); return menu;
+            }
+            var file = new ToolStripMenuItem("&Dosya");
+            file.DropDownItems.Add(Item("&Ana ekran", RequestBack, Keys.Control | Keys.Home));
+            file.DropDownItems.Add(Item("&Yenile", () => _ = RefreshScreenAsync(), Keys.F5));
+            file.DropDownItems.Add(new ToolStripSeparator());
+            file.DropDownItems.Add(Item("&Parolamı değiştir…", () => RequestPage(AppPage.PasswordChange)));
+            if (Session?.Role == UserRole.Admin) file.DropDownItems.Add(Item("Ayarlar ve &yedekleme…", () => RequestPage(AppPage.Settings)));
+            file.DropDownItems.Add(new ToolStripSeparator());
+            file.DropDownItems.Add(Item("Çı&kış", () => RequestLogout(), Keys.Control | Keys.Shift | Keys.Q));
+            var actions = new ToolStripMenuItem("&İşlemler");
+            foreach (var (label, page) in new[] { ("Genel personel", AppPage.General), ("Joker personel", AppPage.Joker), ("Kişi ara", AppPage.Search), ("Ödemeler", AppPage.Payments), ("İzin planı", AppPage.LeavePlan), ("Genel durum", AppPage.Summary) })
+                actions.DropDownItems.Add(Item(label, () => RequestPage(page)));
+            if (Session?.Role == UserRole.Admin) actions.DropDownItems.Add(Item("Yönetici hesapları", () => RequestPage(AppPage.Admin)));
+            var reports = new ToolStripMenuItem("&Rapor");
+            reports.DropDownItems.Add(Item("Excel'e aktar…", () => Export(true)));
+            reports.DropDownItems.Add(Item("CSV'ye aktar…", () => Export(false)));
+            var view = new ToolStripMenuItem("&Görünüm");
+            foreach (var (label, classic, dark) in new[] { ("Windows 2000 · Klasik", true, false), ("Açık tema", false, false), ("Koyu tema", false, true) })
+            {
+                var choice = Item(label, () =>
+                {
+                    var p = UserPreferences.Load(); p.ClassicTheme = classic; p.DarkTheme = dark; p.Save();
+                    foreach (Form form in Application.OpenForms.Cast<Form>().ToArray()) AppTheme.Apply(form);
+                });
+                view.DropDownItems.Add(choice);
+                view.DropDownOpening += (_, _) => { var p = UserPreferences.Load(); choice.Checked = p.ClassicTheme == classic && (classic || p.DarkTheme == dark); };
+            }
+            view.DropDownItems.Add(new ToolStripSeparator()); view.DropDownItems.Add(Item("Kolonları seç…", ShowColumns));
+            var help = new ToolStripMenuItem("&Yardım");
+            help.DropDownItems.Add(Item("Klavye kısayolları", () => MessageBox.Show(this, "F2: Alanları temizle\nF5: Listeyi yenile\nF6 / F7: Personel taslağını kaydet / yükle\nEsc: Ana ekrana dön\nCtrl+Shift+Q: Oturumu kapat", "Klavye kısayolları", MessageBoxButtons.OK, MessageBoxIcon.Information)));
+            menu.Items.AddRange([file, actions, reports, view, help]); return menu;
         }
 
         protected async Task<bool> RunOperationAsync(Func<CancellationToken, Task> operation, string? success = null)

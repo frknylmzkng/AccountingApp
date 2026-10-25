@@ -15,6 +15,7 @@ namespace WinFormsApp2
         public Contact()
         {
             InitializeComponent();
+            ArrangeContact();
         }
 
         private void back_Click(object sender, EventArgs e)

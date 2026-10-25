@@ -5,6 +5,7 @@ namespace WinFormsApp2
         public Dashboard()
         {
             InitializeComponent();
+            ArrangeDashboard();
             AcceptButton = null;
             ActiveControl = null;
         }
@@ -12,11 +13,12 @@ namespace WinFormsApp2
         internal void SetUsername(string username) => userLabel.Text = "Kullanıcı: " + username;
         protected override void OnLoad(EventArgs e)
         {
-            button4.Visible = Session?.Role == UserRole.Admin;
+            button4.Text = Session?.Role == UserRole.Admin ? "&Yönetici hesapları" : "Parolamı &değiştir";
+            PopulateShortcuts();
             base.OnLoad(e);
         }
 
-        private void button4_Click(object sender, EventArgs e) => RequestPage(AppPage.Admin);
+        private void button4_Click(object sender, EventArgs e) => RequestPage(Session?.Role == UserRole.Admin ? AppPage.Admin : AppPage.PasswordChange);
         private void button1_Click(object sender, EventArgs e) => RequestPage(AppPage.General);
         private void button2_Click(object sender, EventArgs e) => RequestPage(AppPage.Joker);
         private void button3_Click(object sender, EventArgs e) => RequestPage(AppPage.Search);

@@ -17,6 +17,7 @@ public partial class Admin : SessionForm
         Controls.Add(reset); EditControls.Add(reset); reset.Click += ResetPassword;
         EditControls.AddRange([ekle_btn, sil_btn]); RefreshAction = LoadDataAsync;
         DeleteAction = () => sil_btn_Click(this, EventArgs.Empty);
+        ArrangeAdmin(deactivate, activate, reset);
     }
     private async void Admin_Load(object sender, EventArgs e) { if (!PreviewOnly) await LoadDataAsync(); }
     private void back_Click(object sender, EventArgs e) => RequestBack();

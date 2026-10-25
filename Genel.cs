@@ -9,6 +9,7 @@ namespace WinFormsApp2
         public Genel()
         {
             InitializeComponent();
+            ArrangePersonnel();
             RecordSelection.Configure(calisanView);
             ResetLeaveInputs();
             EditControls.AddRange([ekle_btn, edit_btn, sil_btn, izinKaydet_btn]);

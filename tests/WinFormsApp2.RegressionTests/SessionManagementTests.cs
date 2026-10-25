@@ -90,7 +90,7 @@ public class SessionManagementTests
         await context.CheckSessionAsync();
         Assert.That(context.IsAuthenticated, Is.False); Assert.That(context.Session, Is.Null);
         Assert.That(context.CurrentPage, Is.EqualTo(AppPage.Login)); Assert.That(previous.IsDisposed, Is.True);
-        Assert.That(context.MainForm!.Controls.OfType<Label>().Any(l => l.Text.Contains("oturumunuz sona erdi")), Is.True);
+        Assert.That(AppTheme.Descendants(context.MainForm!).OfType<Label>().Any(l => l.Visible && l.Text.Contains("oturumunuz sona erdi")), Is.True);
     }
     [Test]
     public async Task ServerRevocationDuringOperationLogsOutWithoutAnErrorDialog()

@@ -100,7 +100,7 @@
             Controls.Add(textBox2);
             Controls.Add(textBox1);
             Controls.Add(back);
-            FormBorderStyle = FormBorderStyle.None;
+            FormBorderStyle = FormBorderStyle.Sizable;
             Name = "Contact";
             StartPosition = FormStartPosition.CenterScreen;
             Text = "Contact";

@@ -2,7 +2,11 @@
 
 .NET 10 Windows Forms uygulaması: personel, izin ve kalan ödeme tutarı takibi. Rehberdeki yöntemler mevcut işlevlere uyarlandı. Ayrıntılı madde eşlemesi `docs/REHBER_UYGULAMA_TAKIBI.md`, kullanım ve sınama adımları `docs/KULLANIM_VE_TEST.md` içindedir.
 
-**Neler, ne zaman değişti?** [Tarihli değişiklik günlüğü](CHANGELOG.md) geliştirmeleri, şema yükseltmelerini ve test sonuçlarını listeler. 25 Ekim 2026 yerel doğrulaması: **383 test başarılı**.
+**Neler, ne zaman değişti?** [Tarihli değişiklik günlüğü](CHANGELOG.md) geliştirmeleri, şema yükseltmelerini ve test sonuçlarını listeler.
+
+Tam doğrulama (26 Ekim 2026): **392 test başarılı, 0 başarısız, 0 atlanan**. Release derlemesi 0 uyarı / 0 hata ile tamamlandı; entegrasyon ve geri yükleme testleri ayrı, geçici LocalDB motorunda çalıştı.
+
+Arayüz güncellemesi (26 Ekim 2026): [Windows 2000 görünümü, yenilenen ekranlar ve görseller](docs/WINDOWS_2000_DENEME.md). Giriş, ana ekran, personel, arama, özet, hesap yönetimi, ödeme, ayarlar, izin ve parola pencereleri düzenlendi. Mevcut v1.0.0 Release paketi bu arayüz güncellemesini içermez; güncel kaynak koddan derlenebilir veya başarılı GitHub Actions çalışmasının `AccountingApp-win-x64` çıktısı indirilebilir.
 
 ## Windows paketini indir ve kur
 

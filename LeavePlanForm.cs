@@ -2,17 +2,16 @@ using System.Data;
 
 namespace WinFormsApp2;
 
-internal sealed class LeavePlanForm : SessionForm
+internal sealed partial class LeavePlanForm : SessionForm
 {
     private readonly DataGridView grid = new() { Name = "LeavePlan", Dock = DockStyle.Fill };
     private readonly DateTimePicker start = new() { Width = 140, Format = DateTimePickerFormat.Short };
     private readonly DateTimePicker end = new() { Width = 140, Format = DateTimePickerFormat.Short };
     public LeavePlanForm()
     {
-        Text = "İzin planı · tüm seçili personel tek işlemde"; ClientSize = new Size(1000, 600); RecordSelection.Configure(grid); grid.MultiSelect = true;
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(12) };
-        var save = new Button { Text = "Seçili planı onayla", AutoSize = true };
-        bar.Controls.AddRange([new Label { Text = "Ctrl ile personel seçin. Başlangıç / bitiş:", AutoSize = true }, start, end, save]); Controls.Add(grid); Controls.Add(bar); EditControls.Add(save);
+        RecordSelection.Configure(grid); grid.MultiSelect = true;
+        var save = new Button { Text = "Seçili planı onayla" };
+        ArrangeLeavePlan(save); EditControls.Add(save);
         RefreshAction = ReloadAsync; Load += async (_, _) => { if (!PreviewOnly) await ReloadAsync(); }; save.Click += Save;
     }
     private async Task ReloadAsync() => await RunOperationAsync(async token =>

@@ -30,6 +30,7 @@ namespace WinFormsApp2
             this.prepareCredentials = prepareCredentials;
             this.authenticate = authenticate;
             InitializeComponent();
+            ArrangeLogin();
             username_txt.PlaceholderText = "Kullanıcı adı";
             password_txt.PlaceholderText = "Şifre";
             AppTheme.Apply(this);

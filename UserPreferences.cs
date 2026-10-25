@@ -11,6 +11,7 @@ namespace WinFormsApp2;
 internal sealed class UserPreferences
 {
     public bool DarkTheme { get; set; }
+    public bool ClassicTheme { get; set; } = true;
     public string DatabaseConfigurationPath { get; set; } = "";
     public string BackupFolder { get; set; } = "";
     public string MirrorFolder { get; set; } = "";

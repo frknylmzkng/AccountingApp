@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Drawing;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -165,27 +165,99 @@ public class GuideUiTests
     [TestCase(typeof(PaymentsForm))]
     [TestCase(typeof(SettingsForm))]
     [TestCase(typeof(LeavePlanForm))]
+    [TestCase(typeof(PasswordChangeForm))]
+    [TestCase(typeof(Contact))]
     public void ScreensRenderWithToolbarAndStatusWithoutDatabaseAccess(Type type)
     {
-        using var form = (SessionForm)Activator.CreateInstance(type)!;
+        using var form = type == typeof(PasswordChangeForm) ? new PasswordChangeForm() : (SessionForm)Activator.CreateInstance(type)!;
         form.Session = new("test-admin", UserRole.Admin); form.PersistGridLayout = false; form.PreviewOnly = true;
         form.ShowInTaskbar = false; form.Opacity = 0; form.StartPosition = FormStartPosition.Manual; form.Location = new Point(-30000, -30000); form.Show();
         var table = new DataTable(); table.Columns.Add("TC", typeof(long)); foreach (string col in new[] { "AD", "SOYAD", "IBAN", "GRUP" }) table.Columns.Add(col);
         table.Columns.Add("PARA", typeof(decimal)); table.Columns.Add("IZINBASLANGIC", typeof(DateTime)); table.Columns.Add("IZINBITIS", typeof(DateTime)); table.Columns.Add("IzinSuresi", typeof(int));
-        table.Rows.Add(11111111111L, "Ada", "Örnek", "TR000000000000000000000000", "Genel", 1500.50m, DateTime.Today, DateTime.Today.AddDays(2), 3); table.AcceptChanges();
-        if (form is Genel or Joker or Search or Summary) foreach (var grid in AppTheme.Descendants(form).OfType<DataGridView>()) { grid.BindingContext = new BindingContext(); grid.DataSource = table.Copy(); grid.ClearSelection(); }
+        table.Rows.Add(11111111111L, "Ada", "Örnek", "TR000000000000000000000000", form is Joker ? "Joker" : "Genel", 1500.50m, DateTime.Today, DateTime.Today.AddDays(2), 3); table.AcceptChanges();
+        if (form is Summary summary) summary.DisplaySummary(table.Copy());
+        else if (form is Genel or Joker or Search or LeavePlanForm) foreach (var grid in AppTheme.Descendants(form).OfType<DataGridView>()) { grid.BindingContext = new BindingContext(); grid.DataSource = table.Copy(); grid.ClearSelection(); }
+        if (form is LeavePlanForm)
+        {
+            var grid = AppTheme.Descendants(form).OfType<DataGridView>().Single(); var records = (DataTable)grid.DataSource!;
+            records.ImportRow(records.Rows[0]); records.Rows.Add(22222222222L, "Deniz", "Örnek", "TR000000000000000000000000", "Genel", 2000m, DBNull.Value, DBNull.Value, DBNull.Value); records.AcceptChanges();
+            grid.ClearSelection(); grid.Rows[0].Selected = grid.Rows[1].Selected = true;
+            var count = AppTheme.Descendants(form).OfType<Label>().Single(c => c.Name == "SelectedLeavePeople");
+            Assert.That(count.Text, Is.EqualTo("Seçili kişi: 1"), "Repeated leave rows must count as one original person.");
+            grid.Rows[2].Selected = true; Assert.That(count.Text, Is.EqualTo("Seçili kişi: 2"));
+            records.Rows[0]["TC"] = 33333333333L; grid.ClearSelection(); grid.Rows[0].Selected = grid.Rows[1].Selected = true;
+            Assert.That(count.Text, Is.EqualTo("Seçili kişi: 1"), "Display changes must not change the original selection identity.");
+            records.RejectChanges(); grid.ClearSelection();
+        }
+        if (form is PaymentsForm)
+        {
+            var personList = AppTheme.Descendants(form).OfType<DataGridView>().Single(g => g.Name == "People");
+            personList.BindingContext = new BindingContext(); personList.DataSource = table.Copy(); personList.ClearSelection();
+            var history = new DataTable(); history.Columns.Add("LedgerId", typeof(long)); history.Columns.Add("TC", typeof(long)); history.Columns.Add("PersonnelGroup", typeof(int)); history.Columns.Add("CreatedUtc", typeof(DateTime)); history.Columns.Add("Kind"); history.Columns.Add("Delta", typeof(decimal)); history.Columns.Add("RunningBalance", typeof(decimal)); history.Columns.Add("Actor"); history.Columns.Add("RequestId", typeof(Guid)); history.Columns.Add("ReversedUtc", typeof(DateTime));
+            history.Rows.Add(1L, 11111111111L, 0, new DateTime(2026, 10, 25, 12, 0, 0), "Payment", -150.50m, 1350m, "ornek-kullanici", Guid.NewGuid(), DBNull.Value); history.AcceptChanges();
+            var ledger = AppTheme.Descendants(form).OfType<DataGridView>().Single(g => g.Name == "Ledger");
+            ledger.BindingContext = new BindingContext(); ledger.DataSource = history; ledger.ClearSelection();
+            ledger.Rows[0].Selected = true;
+            var selectedPayment = typeof(PaymentsForm).GetMethod("SelectedPayment", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(form, null);
+            Assert.That(selectedPayment, Is.SameAs(history.Rows[0]), "Visible columns must retain the payment request used for receipt/reversal.");
+            Assert.That(ledger.Columns.Contains("RequestId"), Is.False); ledger.ClearSelection();
+            typeof(PaymentsForm).GetMethod("ApplyPaymentState", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(form, new object?[] { null });
+        }
+        if (form is Admin)
+        {
+            var accounts = new DataTable(); accounts.Columns.Add("username"); accounts.Columns.Add("RoleName");
+            accounts.Columns.Add("IsActive", typeof(bool)); accounts.Columns.Add("MustChangePassword", typeof(bool)); accounts.Columns.Add("PasswordResetExpiresUtc", typeof(DateTime));
+            accounts.Rows.Add("ornek-yonetici", "Admin", true, false, DBNull.Value);
+            accounts.Rows.Add("ornek-personel", "PersonnelManager", false, true, new DateTime(2026, 10, 25, 12, 0, 0)); accounts.AcceptChanges();
+            var grid = AppTheme.Descendants(form).OfType<DataGridView>().Single(); grid.BindingContext = new BindingContext(); grid.DataSource = accounts; grid.ClearSelection();
+        }
         string root = TestContext.CurrentContext.TestDirectory;
         while (!File.Exists(Path.Combine(root, "WinFormsApp2.csproj"))) root = Path.GetDirectoryName(root) ?? throw new DirectoryNotFoundException();
         string folder = Path.Combine(root, "artifacts", "analysis", "ui-preview"); Directory.CreateDirectory(folder);
         if (form is PaymentsForm) foreach (var field in AppTheme.Descendants(form).OfType<TextBox>()) field.Text = "150,50";
+        if (form is PasswordChangeForm)
+        {
+            var fields = AppTheme.Descendants(form).OfType<TextBox>().ToArray(); Assert.That(fields, Has.Length.EqualTo(3));
+            foreach (var field in fields) { Assert.That(field.UseSystemPasswordChar, Is.True); field.Text = "Yalnizca ornek parola 2026"; }
+            Assert.That(((Button)form.AcceptButton!).Text, Is.EqualTo("Parolayı değiştir"));
+        }
+        if (form is SettingsForm)
+        {
+            foreach (var field in AppTheme.Descendants(form).OfType<TextBox>())
+                field.Text = field.Name switch { "configurationPath" => @"C:\Ornek\Baglanti\appsettings.json", "backupFolder" => @"C:\Ornek\Yedekler", "mirrorFolder" => @"E:\Ornek\Yedekler", _ => @"C:\Ornek\Gorseller\logo.png" };
+            var choices = AppTheme.Descendants(form).OfType<CheckBox>().ToArray();
+            var classicChoice = choices.Single(c => c.Text.Contains("Windows 2000")); var darkChoice = choices.Single(c => c.Text == "Koyu tema");
+            classicChoice.Checked = false; Assert.That(darkChoice.Enabled, Is.True);
+            classicChoice.Checked = true; Assert.That(darkChoice.Enabled, Is.False);
+        }
+        if (form is Contact)
+        {
+            foreach (var field in AppTheme.Descendants(form).OfType<TextBox>()) field.Text = "05xx xxx xx xx";
+            int index = 1;
+            foreach (var card in AppTheme.Descendants(form).OfType<GroupBox>()) card.Text = "Örnek kişi " + index++;
+        }
         foreach (bool dark in new[] { false, true })
         {
             AppTheme.Apply(form, dark); using var image = new Bitmap(form.Width, form.Height); form.DrawToBitmap(image, new Rectangle(Point.Empty, image.Size)); image.Save(Path.Combine(folder, type.Name + (dark ? "-dark.png" : "-light.png")));
         }
+        AppTheme.Apply(form, classicOverride: true);
+        form.Refresh(); Application.DoEvents();
+        using (var image = new Bitmap(form.Width, form.Height)) { form.DrawToBitmap(image, new Rectangle(Point.Empty, image.Size)); image.Save(Path.Combine(folder, type.Name + "-classic.png")); }
         Assert.That(form.Controls.OfType<ToolStrip>().Count(s => s is not StatusStrip), Is.EqualTo(1)); Assert.That(form.Controls.OfType<StatusStrip>().Single().Items.Count, Is.EqualTo(3));
         Assert.That(form.Controls.OfType<ToolStrip>().All(c => c.Visible), Is.True);
         foreach (var field in AppTheme.Descendants(form).OfType<TextBox>())
-        { Assert.That(field.Visible, Is.True); Assert.That(field.Width, Is.GreaterThan(50)); Assert.That(field.Parent!.ClientRectangle.Contains(field.Bounds), Is.True, field.Name); }
+        { Assert.That(field.Visible, Is.True); Assert.That(field.Width, Is.GreaterThan(50)); Assert.That(field.Height, Is.GreaterThan(16), field.Name); Assert.That(field.Parent!.ClientRectangle.Contains(field.Bounds), Is.True, field.Name); }
+        if (form is Genel or Joker or Search or Contact or Admin or PaymentsForm or SettingsForm or LeavePlanForm or PasswordChangeForm)
+        foreach (var size in form is PaymentsForm or SettingsForm or LeavePlanForm or PasswordChangeForm ? new[] { form.Size, form.MinimumSize, new Size(1920, 1080) } : new[] { form.Size })
+        {
+            form.Size = size; form.PerformLayout();
+            foreach (var control in AppTheme.Descendants(form).Where(c => c is Button or TextBox or DateTimePicker or ComboBox))
+            {
+                var bounds = control.RectangleToScreen(control.ClientRectangle);
+                for (var parent = control.Parent; parent != null; parent = parent.Parent)
+                    Assert.That(parent.RectangleToScreen(parent.ClientRectangle).Contains(bounds), Is.True, control.Name + " is clipped by " + parent.GetType().Name);
+            }
+        }
     }
     [Test]
     public void ViewerCannotNavigateToAdminOrSettingsAndLogoutDropsRole()
@@ -197,7 +269,7 @@ public class GuideUiTests
     [Test]
     public void ThemeSetsThirtySixPixelHeadersAndPlaceholders()
     {
-        using var form = new Form(); var grid = new DataGridView(); var text = new TextBox { Name = "TC_txt" }; form.Controls.AddRange([grid, text]); AppTheme.Apply(form);
+        using var form = new Form(); var grid = new DataGridView(); var text = new TextBox { Name = "TC_txt" }; form.Controls.AddRange([grid, text]); AppTheme.Apply(form, false);
         Assert.That(grid.ColumnHeadersHeight, Is.EqualTo(36)); Assert.That(grid.AllowUserToOrderColumns, Is.True); Assert.That(text.PlaceholderText, Does.Contain("11"));
     }
 }

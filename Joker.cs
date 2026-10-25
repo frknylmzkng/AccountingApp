@@ -9,6 +9,7 @@ namespace WinFormsApp2
         public Joker()
         {
             InitializeComponent();
+            ArrangePersonnel();
             RecordSelection.Configure(jokerView);
             EditControls.AddRange([ekle_btn, edit_btn, sil_btn]);
             RefreshAction = () => LoadDataAsync(); ClearAction = Temizle; DeleteAction = () => sil_btn_Click(this, EventArgs.Empty);

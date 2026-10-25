@@ -5,6 +5,16 @@ namespace WinFormsApp2.RegressionTests;
 [TestFixture, NonParallelizable, Category("Passwords")]
 public class PasswordFeatureTests
 {
+    [Test, Apartment(ApartmentState.STA)]
+    public void EscapeCancelsPasswordResetAndClearsAdministratorSecret()
+    {
+        using var reset = new PasswordResetDialog(new("test-admin", UserRole.Admin), new("test-target", new byte[8], Guid.NewGuid())) { PreviewOnly = true, Opacity = 0, ShowInTaskbar = false };
+        reset.Show(); var secret = AppTheme.Descendants(reset).OfType<TextBox>().Single(); secret.Text = "Only-an-example-secret";
+        object[] arguments = [new Message(), Keys.Escape];
+        var handled = typeof(PasswordResetDialog).GetMethod("ProcessCmdKey", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(reset, arguments);
+        Assert.That(handled, Is.EqualTo(true)); Assert.That(reset.Visible, Is.False);
+        Assert.That(reset.DialogResult, Is.EqualTo(DialogResult.Cancel)); Assert.That(reset.Result, Is.Null); Assert.That(secret.Text, Is.Empty);
+    }
     [TestCase(0)]
     [TestCase(14)]
     [TestCase(1025)]
@@ -46,8 +56,15 @@ public class PasswordFeatureTests
             }
             foreach (var button in AppTheme.Descendants(form).OfType<Button>())
                 Assert.That(button.Parent!.ClientRectangle.Contains(button.Bounds), Is.True, button.Text);
+            foreach (var control in AppTheme.Descendants(form).Where(c => c is TextBox or Button or CheckBox))
+            {
+                var bounds = control.RectangleToScreen(control.ClientRectangle);
+                for (var parent = control.Parent; parent != null; parent = parent.Parent)
+                    Assert.That(parent.RectangleToScreen(parent.ClientRectangle).Contains(bounds), Is.True, control.Name + " is clipped by " + parent.GetType().Name);
+            }
             string evidence = Path.GetFullPath(Path.Combine(TestContext.CurrentContext.TestDirectory, "../../../../../artifacts/analysis/password-security-ui"));
             Directory.CreateDirectory(evidence);
+            form.Refresh(); Application.DoEvents();
             using var bitmap = new Bitmap(form.Width, form.Height);
             form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
             bitmap.Save(Path.Combine(evidence, form.GetType().Name + ".png"));

@@ -13,11 +13,19 @@ public class RecordSelectionTests
     [TestCase(typeof(Search))]
     [TestCase(typeof(Summary))]
     [TestCase(typeof(Contact))]
-    public void EmbeddedNavigationImagesLoadOnTheUpdatedRuntime(Type formType)
+    public void NavigationControlsLoadOnTheUpdatedRuntime(Type formType)
     {
         using var form = (Form)Activator.CreateInstance(formType)!;
         var back = (Button)formType.GetField("back",
             BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(form)!;
+        if (back.IsDisposed && form is SessionForm screen)
+        {
+            screen.PreviewOnly = true; screen.Session = new("preview-user", UserRole.Admin); screen.InitializeChrome();
+            var menu = screen.MainMenuStrip!;
+            Assert.That(menu.Items.Cast<ToolStripItem>().Any(i => i.Text?.Contains("Dosya") == true), Is.True);
+            using var image = new Bitmap(menu.Width, menu.Height); menu.DrawToBitmap(image, new Rectangle(Point.Empty, image.Size));
+            return;
+        }
         Assert.That(back.BackgroundImage, Is.Not.Null);
         Assert.That(back.BackgroundImage!.Width, Is.GreaterThan(0));
         using var rendered = new Bitmap(back.Width, back.Height);

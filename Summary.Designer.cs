@@ -215,14 +215,14 @@
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            BackColor = Color.Orange;
+            BackColor = SystemColors.Control;
             ClientSize = new Size(800, 450);
             Controls.Add(panel7);
             Controls.Add(panel5);
             Controls.Add(panel3);
             Controls.Add(panel1);
             Controls.Add(back);
-            FormBorderStyle = FormBorderStyle.None;
+            FormBorderStyle = FormBorderStyle.Sizable;
             Name = "Summary";
             StartPosition = FormStartPosition.CenterScreen;
             Text = "Summary";

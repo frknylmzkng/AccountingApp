@@ -3,7 +3,7 @@ using System.Globalization;
 
 namespace WinFormsApp2;
 
-internal sealed class PaymentsForm : SessionForm
+internal sealed partial class PaymentsForm : SessionForm
 {
     private readonly DataGridView people = new() { Name = "People", Dock = DockStyle.Fill };
     private readonly DataGridView ledger = new() { Name = "Ledger", Dock = DockStyle.Fill };
@@ -21,19 +21,12 @@ internal sealed class PaymentsForm : SessionForm
     {
         Text = "Personel ödemeleri ve defteri"; ClientSize = new Size(1080, 680);
         RecordSelection.Configure(people); RecordSelection.Configure(ledger);
-        var split = new SplitContainer { Dock = DockStyle.Fill, Size = ClientSize, Orientation = Orientation.Horizontal, SplitterDistance = 280 }; split.Panel1.Controls.Add(people); split.Panel2.Controls.Add(ledger);
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.TopDown, Padding = new Padding(10) };
-        var reverse = new Button { Text = "Ödemeyi iptal et", AutoSize = true };
-        var receipt = new Button { Text = "Seçili ödeme fişi", AutoSize = true }; var closing = new Button { Text = "Günlük kapanış", AutoSize = true };
-        var paymentRow = new FlowLayoutPanel { AutoSize = true, WrapContents = true };
-        var inspect = new Button { Text = "Ödeme sonucunu kontrol et", AutoSize = true };
-        paymentRow.Controls.AddRange([new Label { Text = "Tutar (TL)", AutoSize = true, Padding = new Padding(0, 6, 0, 0) }, amount, pay, reverse, receipt, thermal]);
-        var closingRow = new FlowLayoutPanel { AutoSize = true, WrapContents = true };
-        closingRow.Controls.AddRange([new Label { Text = "Kapanış günü", AutoSize = true, Padding = new Padding(0, 6, 0, 0) }, day, new Label { Text = "Beyan (TL)", AutoSize = true, Padding = new Padding(0, 6, 0, 0) }, declared, closing]);
-        var recoveryRow = new FlowLayoutPanel { AutoSize = true, WrapContents = true };
-        recoveryRow.Controls.AddRange([inspect, acknowledge]);
-        bar.Controls.AddRange([new Label { Text = "Ödeme: seçili personelin kalan tutarını azaltır.", AutoSize = true }, paymentRow, paymentState, recoveryRow, closingRow]);
-        Controls.Add(split); Controls.Add(bar); EditControls.Add(pay); EditControls.Add(acknowledge);
+        var reverse = new Button { Text = "Ödemeyi iptal et" };
+        var receipt = new Button { Text = "Seçili ödeme fişi" };
+        var closing = new Button { Text = "Kapanış önizlemesi" };
+        var inspect = new Button { Text = "Ödeme sonucunu kontrol et" };
+        ArrangePayments(reverse, receipt, closing, inspect);
+        EditControls.Add(pay); EditControls.Add(acknowledge);
         pay.Click += Pay; reverse.Click += Reverse; receipt.Click += Receipt; closing.Click += PrintClosing;
         inspect.Click += async (_, _) => await ReloadAsync();
         acknowledge.Click += async (_, _) =>

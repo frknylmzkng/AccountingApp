@@ -44,6 +44,21 @@ public class PersonnelVersionTests
         Assert.That(RecordSelection.OriginalVersion(grid), Is.EqualTo(FirstVersion));
     }
     [Test]
+    public void JokerVisibleColumnsPreserveOriginalIdentityAndVersionAfterSorting()
+    {
+        using var form = new Joker { PreviewOnly = true, PersistGridLayout = false, Session = new("preview-user", UserRole.Admin), Opacity = 0, ShowInTaskbar = false };
+        form.Show();
+        var table = Records(); table.Columns.Add("SOYAD"); table.Columns.Add("IBAN"); table.Columns.Add("GRUP");
+        foreach (DataRow row in table.Rows) { row["SOYAD"] = "Örnek"; row["IBAN"] = "TR000000000000000000000000"; row["GRUP"] = "Joker"; }
+        table.AcceptChanges();
+        var grid = AppTheme.Descendants(form).OfType<DataGridView>().Single(); grid.DataSource = table;
+        table.DefaultView.Sort = "TC DESC"; grid.ClearSelection(); grid.Rows[0].Selected = true;
+        Assert.That(RecordSelection.TryGetTc(grid, out long tc), Is.True); Assert.That(tc, Is.EqualTo(22222222222L));
+        Assert.That(grid.Columns.Contains(PersonnelConcurrency.ColumnName), Is.False);
+        table.Rows[1][PersonnelConcurrency.ColumnName] = FirstVersion.ToArray();
+        Assert.That(RecordSelection.OriginalVersion(grid), Is.EqualTo(NextVersion));
+    }
+    [Test]
     public void UnversionedOrUnsavedSelectionCannotProduceAnUpdateToken()
     {
         using var form = new Form(); var table = Records(); using var grid = Bind(form, table);
