@@ -37,6 +37,7 @@ internal sealed class SettingsForm : SessionForm
         bool done = await RunOperationAsync(async token =>
         {
             User.DemandAdmin();
+            await AccountAuthorization.ValidateAsync(AppDatabase.ConnectionString, User, AccountAccess.Admin, token);
             if (changed)
             {
                 var settings = DatabaseSettings.Load(string.IsNullOrWhiteSpace(selected) ? Path.Combine(AppContext.BaseDirectory, "appsettings.json") : selected);

@@ -1,6 +1,8 @@
-﻿# AccountingApp
+# AccountingApp
 
 .NET 10 Windows Forms uygulaması: personel, izin ve kalan ödeme tutarı takibi. Rehberdeki yöntemler mevcut işlevlere uyarlandı. Ayrıntılı madde eşlemesi `docs/REHBER_UYGULAMA_TAKIBI.md`, kullanım ve sınama adımları `docs/KULLANIM_VE_TEST.md` içindedir.
+
+**Neler, ne zaman değişti?** [Tarihli değişiklik günlüğü](CHANGELOG.md) geliştirmeleri, şema yükseltmelerini ve test sonuçlarını listeler. 25 Ekim 2026 yerel doğrulaması: **383 test başarılı**.
 
 ## Windows paketini indir ve kur
 
@@ -21,7 +23,7 @@ Copy-Item .\database\appsettings.new-install.example.json .\appsettings.json
 
 Kurulum aracının istediği ilk yönetici kullanıcı adını, parolayı ve parola tekrarını girin. Sabit başlangıç parolası yoktur. Kurulum tamamlanınca `WinFormsApp2.exe` dosyasını açın. Ayrıntılar: [veritabanı kurulumu](database/README.md) ve [kullanım kılavuzu](docs/KULLANIM_VE_TEST.md).
 
-Güncel paket: `artifacts\releases\localdb-startup-fix\WinFormsApp2.exe`. Kullanıcının açık onayıyla mevcut veritabanı doğrulanmış yedek alınarak yükseltildi. Personel, izin, tutar ve hesap özetleri korundu; rol ve açılış bakiyeleri doğrulandı. Masaüstündeki **Muhasebe - Güncel** kısayolu bu paketi açar. LocalDB kapalıyken, doğrudan Windows Explorer oturumundan giriş hazırlığı doğrulandı. Başlangıçta kurulu Microsoft SqlLocalDB aracı shell kullanmadan çağrılır; bu işlem veritabanını silmez veya yeniden oluşturmaz. Dağıtım klasörünün tamamı birlikte taşınır; paket .NET 10.0.13 çalışma bileşenlerini içerir. LocalDB veya güvenilir TLS sertifikası yapılandırılmış yerel SQL Express gerekir.
+Güncel paket: `artifacts\releases\login-throttle\WinFormsApp2.exe`. Kullanıcının açık onayıyla mevcut veritabanı doğrulanmış yedek alınarak yükseltildi. Personel, izin, tutar ve hesap özetleri korundu; rol ve açılış bakiyeleri doğrulandı. Masaüstündeki **Muhasebe - Güncel** kısayolu bu paketi açar. LocalDB kapalıyken, doğrudan Windows Explorer oturumundan giriş hazırlığı doğrulandı. Başlangıçta kurulu Microsoft SqlLocalDB aracı shell kullanmadan çağrılır; bu işlem veritabanını silmez veya yeniden oluşturmaz. Dağıtım klasörünün tamamı birlikte taşınır; paket .NET 10.0.13 çalışma bileşenlerini içerir. LocalDB veya güvenilir TLS sertifikası yapılandırılmış yerel SQL Express gerekir.
 
 Uygulama EXE yanındaki `appsettings.json` dosyasını kullanır. Varsayılan bağlantı, kullanıcının Documents/Muhasebe2.mdf dosyasıdır. Yönetici, Ayarlar ekranından başka JSON profilini doğrulayarak seçebilir; değişiklik yeniden girişte uygulanır. SQL Express örneği `database/appsettings.sqlexpress.example.json` içindedir. İlk kurulum ve mevcut veritabanı yükseltmesi farklı işlemlerdir; `database/README.md` ayrıntıları açıklar.
 
@@ -34,7 +36,11 @@ Yeni özellikler:
 - Excel/CSV, A4 ve 80 mm ödeme fişi, QR referansı, günlük ödeme kapanışı, tarih sıralı ve renkli izin uyarıları, toplu izin planı.
 - Yükseltmeden önce doğrulanmış yedek; yönetici oturumunda günlük yedek, son 14 kayıt, isteğe bağlı aynalama ve onaylı geri yükleme.
 
-PBKDF2-HMAC-SHA256, 600.000 yineleme, rastgele 16 bayt salt ve 32 bayt hash korunur. Eski parolalar kontrollü transaction ile dönüştürülür; bozuk hash açık metne geri düşmez. Kullanıcı listesi yalnızca kullanıcı adı ve rol okur. Giriş ve hesap ekleme parola alanları maskelidir. Parola boşlukları korunur; yeni parola sınırı 6–1024 karakterdir.
+PBKDF2-HMAC-SHA256, 600.000 yineleme, rastgele 16 bayt salt ve 32 bayt hash korunur. Eski parolalar kontrollü transaction ile dönüştürülür; bozuk hash açık metne geri düşmez. Kullanıcı listesinde parola veya hash okunmaz. Parola alanları maskelidir. Parola boşlukları korunur; yeni hesaplarda ve parola değişiminde sınır 15–1024 karakterdir. Mevcut kısa parolalar değiştirilmelerine kadar girişte geçerlidir.
+
+Her kullanıcı üst menüdeki **Parolamı değiştir** ile mevcut parolasını doğrulayarak yeni parola belirleyebilir. Yönetici, hesap listesinden başka bir etkin hesabı seçip **Parola sıfırla…** ile kendi parolasını tekrar doğrular. Uygulama 30 dakika geçerli rastgele geçici parola üretir; bu hesap kendi parolasını belirleyene kadar diğer ekranlara erişemez. Parola değişimi ve sıfırlama eski oturumları geçersiz kılar. Ayrıntılar ve deneme adımları: [parola güvenliği kılavuzu](docs/PAROLA_DEGISTIRME_VE_SIFIRLAMA.md). Bu özellikler yerel `artifacts\releases\login-throttle` paketindedir; yukarıdaki eski v1.0.0 Release bağlantısı bu yerel değişiklikleri içermez.
+
+Hatalı giriş sınırı: aynı hesapta 15 dakika içinde 5 yanlış parola, 5 dakikalık geçici kilit oluşturur. Sayaç veritabanında tutulur; yeniden başlatma veya farklı pencereler sınırı aşamaz. Açık oturumlar etkilenmez. Mevcut parolayla yeniden doğrulamalar da aynı bütçeyi kullanır. [Kullanım ve deneme kılavuzu](docs/HATALI_GIRIS_SINIRLAMASI.md).
 
 Para girişinde `1500,50`, `1500.50`, `1.500,50` ve `1,500.50` aynı tutardır. En fazla iki ondalık kabul edilir; `1.500`/`1,500` belirsiz olduğu için reddedilir. Önceki negatif tutar davranışı korunur; pozitif olmayan ödeme yapılamaz. Önceden yanlış kaydedilmiş tutarlar otomatik değiştirilmez.
 
@@ -59,6 +65,6 @@ SDK `global.json` ile 10.0.402 sürümüne sabitlenmiştir. `dotnet.cmd` varsa `
 Paket üretimi:
 
 ```powershell
-.\dotnet.cmd publish WinFormsApp2.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=10.0.13 -p:PublishTrimmed=false -p:RestoreLockedMode=true -p:TreatWarningsAsErrors=true -o artifacts\releases\localdb-startup-fix
-.\dotnet.cmd publish tools\DatabaseSetup\AccountingApp.DatabaseSetup.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=10.0.13 -p:PublishTrimmed=false -p:RestoreLockedMode=true -p:TreatWarningsAsErrors=true -o artifacts\releases\localdb-startup-fix
+.\dotnet.cmd publish WinFormsApp2.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=10.0.13 -p:PublishTrimmed=false -p:RestoreLockedMode=true -p:TreatWarningsAsErrors=true -o artifacts\releases\login-throttle
+.\dotnet.cmd publish tools\DatabaseSetup\AccountingApp.DatabaseSetup.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=10.0.13 -p:PublishTrimmed=false -p:RestoreLockedMode=true -p:TreatWarningsAsErrors=true -o artifacts\releases\login-throttle
 ```

@@ -40,9 +40,9 @@ public class TransactionTests
         connectionString = builder.ConnectionString;
         Execute(@"
             CREATE TABLE Calisan (TC bigint PRIMARY KEY, AD nvarchar(100) NOT NULL,
-                SOYAD nvarchar(100) NOT NULL, IBAN nvarchar(34) NOT NULL, PARA decimal(18,2) NOT NULL);
+                SOYAD nvarchar(100) NOT NULL, IBAN nvarchar(34) NOT NULL, PARA decimal(18,2) NOT NULL, RecordVersion rowversion NOT NULL);
             CREATE TABLE Joker (TC bigint PRIMARY KEY, AD nvarchar(100) NOT NULL,
-                SOYAD nvarchar(100) NOT NULL, IBAN nvarchar(34) NOT NULL, PARA decimal(18,2) NOT NULL);
+                SOYAD nvarchar(100) NOT NULL, IBAN nvarchar(34) NOT NULL, PARA decimal(18,2) NOT NULL, RecordVersion rowversion NOT NULL);
             CREATE TABLE izinler (Id int IDENTITY PRIMARY KEY, TC bigint NOT NULL REFERENCES Calisan(TC),
                 IZINBASLANGIC date NOT NULL, IZINBITIS date NOT NULL,
                 IzinSuresi AS DATEDIFF(day, IZINBASLANGIC, IZINBITIS),
@@ -87,7 +87,7 @@ public class TransactionTests
             Store.Add(group, person!, group == PersonnelGroup.General ? ValidLeave : null);
             string table = group == PersonnelGroup.General ? "Calisan" : "Joker";
             Assert.That(Scalar($"SELECT PARA FROM {table}"), Is.EqualTo(1500.50m));
-            Store.Update(group, person! with { Amount = 2500.75m });
+            Store.Update(group, person! with { Amount = 2500.75m }, (byte[])Scalar($"SELECT RecordVersion FROM {table}")!);
             Assert.That(Scalar($"SELECT PARA FROM {table}"), Is.EqualTo(2500.75m));
         }
         finally { CultureInfo.CurrentCulture = previous; }
@@ -104,7 +104,7 @@ public class TransactionTests
         string table = general ? "Calisan" : "Joker";
         Store.Add(group, Person(amount: amount));
         Assert.That(Scalar($"SELECT PARA FROM {table}"), Is.EqualTo(amount));
-        Store.Update(group, Person(amount: 0m));
+        Store.Update(group, Person(amount: 0m), (byte[])Scalar($"SELECT RecordVersion FROM {table}")!);
         Assert.That(Scalar($"SELECT PARA FROM {table}"), Is.EqualTo(0m));
     }
 
@@ -147,7 +147,7 @@ public class TransactionTests
     public void EditingPersonDoesNotCreateOrAlterLeave(bool hasLeave)
     {
         Store.Add(PersonnelGroup.General, Person(), hasLeave ? ValidLeave : null);
-        Store.Update(PersonnelGroup.General, Person() with { Amount = 9000m, FirstName = "Updated" });
+        Store.Update(PersonnelGroup.General, Person() with { Amount = 9000m, FirstName = "Updated" }, (byte[])Scalar("SELECT RecordVersion FROM Calisan")!);
         Assert.That(Scalar("SELECT PARA FROM Calisan"), Is.EqualTo(9000m));
         Assert.That(Scalar("SELECT COUNT(*) FROM izinler"), Is.EqualTo(hasLeave ? 1 : 0));
         if (hasLeave)
@@ -206,7 +206,7 @@ public class TransactionTests
     {
         Store.Add(PersonnelGroup.General, Person(), ValidLeave);
         Execute("INSERT INTO izinler (TC,IZINBASLANGIC,IZINBITIS) VALUES (11111111111,'20260201','20260203')");
-        Store.Update(PersonnelGroup.General, Person() with { Amount = 2000m });
+        Store.Update(PersonnelGroup.General, Person() with { Amount = 2000m }, (byte[])Scalar("SELECT RecordVersion FROM Calisan")!);
         Assert.Throws<InvalidOperationException>(() => Store.SaveLeave(Person().Tc,
             new LeavePeriod(new DateTime(2026, 3, 1), new DateTime(2026, 3, 3))));
         Assert.That(Scalar("SELECT COUNT(DISTINCT IZINBASLANGIC) FROM izinler"), Is.EqualTo(2));
@@ -268,7 +268,7 @@ public class TransactionTests
     public void JokerDeleteStaysInJokerEvenWithALegacyCrossGroupDuplicate()
     {
         Store.Add(PersonnelGroup.General, Person(), ValidLeave);
-        Execute("INSERT INTO Joker SELECT TC, AD, SOYAD, IBAN, PARA FROM Calisan");
+        Execute("INSERT INTO Joker(TC,AD,SOYAD,IBAN,PARA) SELECT TC,AD,SOYAD,IBAN,PARA FROM Calisan");
         Store.Delete(PersonnelGroup.Joker, Person().Tc);
         Assert.That(Scalar("SELECT COUNT(*) FROM Joker"), Is.EqualTo(0));
         Assert.That(Scalar("SELECT COUNT(*) FROM Calisan"), Is.EqualTo(1));
@@ -288,8 +288,18 @@ public class TransactionTests
     {
         Store.Add(PersonnelGroup.General, Person(), ValidLeave);
         Assert.Throws<InvalidOperationException>(() => Store.Update(PersonnelGroup.Joker,
-            Person() with { Amount = 9000m }));
+            Person() with { Amount = 9000m }, (byte[])Scalar("SELECT RecordVersion FROM Calisan")!));
         Assert.That(Scalar("SELECT PARA FROM Calisan"), Is.EqualTo(1500.50m));
+    }
+    [Test]
+    public void LegacyUpdateAlsoRejectsStaleVersionAndPreservesNewIban()
+    {
+        Store.Add(PersonnelGroup.General, Person());
+        byte[] original = (byte[])Scalar("SELECT RecordVersion FROM Calisan")!;
+        Store.Update(PersonnelGroup.General, Person() with { Iban = "TR111111111111111111111111" }, original);
+        Assert.Throws<InvalidOperationException>(() => Store.Update(PersonnelGroup.General, Person() with { FirstName = "Stale" }, original));
+        Assert.That(Scalar("SELECT IBAN FROM Calisan"), Is.EqualTo("TR111111111111111111111111"));
+        Assert.That(Scalar("SELECT AD FROM Calisan"), Is.EqualTo("Ada"));
     }
 
     [Test]

@@ -36,17 +36,19 @@ namespace WinFormsApp2
             });
         }
 
-        public void Update(PersonnelGroup group, PersonnelDetails person)
+        public void Update(PersonnelGroup group, PersonnelDetails person, byte[] expectedVersion)
         {
+            byte[] version = PersonnelConcurrency.RequireVersion(expectedVersion);
             string table = GetTable(group);
             DatabaseTransaction.Run(connectionString, (connection, transaction) =>
             {
                 EnsureSingleRecord(connection, transaction, table, person.Tc);
                 using var update = new SqlCommand($@"
                     UPDATE {table} SET AD = @AD, SOYAD = @SOYAD, IBAN = @IBAN, PARA = @PARA
-                    WHERE TC = @TC", connection, transaction);
+                    WHERE TC = @TC AND RecordVersion = @version", connection, transaction);
                 AddPersonParameters(update, person);
-                update.ExecuteNonQuery();
+                update.Parameters.Add("@version", SqlDbType.Binary, 8).Value = version;
+                if (update.ExecuteNonQuery() != 1) throw new InvalidOperationException(PersonnelConcurrency.ConflictMessage);
             });
         }
 

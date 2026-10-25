@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Muhasebe — Parola güvenliği kılavuzu</title>
+<style>
+:root{color-scheme:light;font-family:Segoe UI,Arial,sans-serif;color:#17283d;background:#f0f4f8;font-size:16px;line-height:1.7}body{margin:0}.toolbar{position:sticky;top:0;background:#18304e;color:white;padding:12px 24px;display:flex;gap:20px;align-items:center;justify-content:space-between}.toolbar strong{font-size:15px}.toolbar button{border:0;border-radius:6px;padding:9px 16px;background:#fff;color:#18304e;cursor:pointer;font:inherit}main{max-width:1000px;margin:24px auto 60px;padding:40px 48px;background:#fff;box-shadow:0 2px 16px #182e5010;border-radius:10px}h1{line-height:1.2;color:#173759;font-size:2.1rem;margin-top:0}h2{margin-top:2.2rem;padding-top:1rem;border-top:2px solid #e6edf4;font-size:1.35rem;color:#1b4973}strong{color:#153e62}.toolbar strong{color:white}table{border-collapse:collapse;width:100%;margin:18px 0;font-size:.96rem}th,td{border:1px solid #d8e2ed;text-align:left;padding:10px 14px;vertical-align:top}th{background:#eaf1f8}tr:nth-child(even){background:#f8fafc}li{padding:3px 0}blockquote{margin:18px 0;padding:14px 20px;border-left:5px solid #f0ac36;background:#fff7e6}blockquote p{margin:0}input[type=checkbox]{width:18px;height:18px;accent-color:#1d628d}code{background:#eef3f8;padding:2px 5px;border-radius:4px}a{color:#145f96}p,li{overflow-wrap:anywhere}@media(max-width:700px){main{margin:0;padding:24px 18px;border-radius:0}h1{font-size:1.65rem}.toolbar{padding:10px 16px}th,td{padding:8px}}@media print{.toolbar{display:none}body{background:#fff}main{margin:0;padding:0;max-width:none;box-shadow:none}h2{break-after:avoid}tr,blockquote{break-inside:avoid}h1{font-size:24pt}h2{font-size:15pt}body{font-size:10.5pt;line-height:1.45}a{color:inherit;text-decoration:none}@page{size:A4;margin:18mm}}
+</style></head><body><div class="toolbar"><strong>Muhasebe · Kullanıcı kılavuzu</strong><button onclick="window.print()">Yazdır / PDF olarak kaydet</button></div><main><h1 id="parola-degistirme-ve-yoneticiyle-sfrlama">Parola değiştirme ve yöneticiyle sıfırlama</h1>
+<p>25 Ekim 2026. Yerel paket: <code>artifacts/releases/password-security/WinFormsApp2.exe</code>.</p>
+<p>Sonraki güncellemede giriş ve mevcut parola doğrulamalarına hesap başına geçici kilit eklendi. Güncel kurallar <a href="HATALI_GIRIS_SINIRLAMASI.md">hatalı giriş kılavuzundadır</a>; aşağıdaki doğrulama kaydı parola özelliklerinin ilk eklendiği sürüme aittir.</p>
+<h2 id="kendi-parolan-degistirme">Kendi parolanı değiştirme</h2>
+<ol>
+<li>Güncel uygulamada kendi hesabınla giriş yap. Bütün roller bu işlemi yapabilir.</li>
+<li>Üst menüde <strong>Parolamı değiştir</strong> seçeneğini aç.</li>
+<li>Mevcut parolanı, yeni parolanı ve yeni parola tekrarını gir. Alanlar maskelidir.</li>
+<li><strong>Parolayı değiştir</strong> düğmesine bas. Başarıdan sonra giriş ekranına dönersin; yeni parolanla giriş yap.</li>
+</ol>
+<p>Yeni parola 15–1024 karakter olmalı ve mevcut paroladan farklı olmalıdır. Boşluklar kırpılmaz; tekrar alanı birebir aynı olmalıdır. Uzun bir parola cümlesi kullanabilirsin. Eski kısa parolan, değiştirene kadar girişte kabul edilir. Yeni hesap ve ilk yönetici oluşturma da yeni uzunluk sınırını kullanır.</p>
+<p>Yanlış mevcut parola, farklı tekrar veya kısa yeni parola kaydı değiştirmez. Bu durumlarda alanlar temizlenir; yeniden girmen gerekir. Ana ekrana dönmek veya çıkmak kayıt yapmaz.</p>
+<h2 id="yoneticiyle-baska-bir-hesab-sfrlama">Yöneticiyle başka bir hesabı sıfırlama</h2>
+<ol>
+<li>Yönetici olarak giriş yapıp yönetici/hesap ekranını aç.</li>
+<li>Listedeki hedef <strong>etkin hesabın satırını</strong> seç. Kendi hesabın için kendi parola değiştirme ekranını kullan.</li>
+<li><strong>Parola sıfırla…</strong> düğmesine bas. Pencerede hedef kullanıcı adını kontrol et.</li>
+<li>Kendi yönetici parolanı girip <strong>Geçici parola oluştur</strong> düğmesine bas.</li>
+<li>Başarılı işlemden sonra açılan pencerede geçici parolayı <strong>Geçici parolayı göster</strong> ile okuyabilirsin. Uygulama bunu kendiliğinden panoya veya dosyaya kopyalamaz.</li>
+<li>Geçici parolayı hesap sahibine güvenli bir kanaldan ilet. Pencere kapatıldıktan sonra uygulama aynı parolayı tekrar göstermez. Kaybolursa yeniden sıfırla.</li>
+</ol>
+<p>Geçici parola kriptografik rastgele üretilir, 32 karakterdir ve veritabanı saatine göre <strong>30 dakika</strong> geçerlidir. Sıfırlama eski parolayı ve hedef hesabın eski oturumlarını geçersiz kılar. Süresi dolarsa yönetici tekrar sıfırlamalıdır; hesabı etkinleştirmek süreyi uzatmaz.</p>
+<p>Hedef hesap seçimden sonra değişmişse veya silinip aynı adla yeniden oluşturulmuşsa işlem reddedilir. Listeyi yenileyip hesabı yeniden seç. Pasif hesabı sıfırlamak için önce hesap durumunu kontrol et. Sıfırlama penceresindeki yönetici parolası yanlışsa hedef hesap değişmez.</p>
+<h2 id="hesap-sahibinin-gecici-parolayla-girisi">Hesap sahibinin geçici parolayla girişi</h2>
+<ol>
+<li>Kullanıcı adı ve geçici parolayla giriş yap.</li>
+<li>Doğrudan parola değiştirme ekranı açılır. Geçici parolayı <strong>Mevcut / geçici parola</strong> alanına gir.</li>
+<li>Kendi yeni parolanı ve tekrarını girip kaydet.</li>
+<li>Giriş ekranında kendi yeni parolanla tekrar giriş yap. Geçici parola artık geçerli değildir.</li>
+</ol>
+<p>Parola yenilenene kadar personel, ödeme, rapor, yönetici, ayar ve yedek ekranlarına erişim verilmez. Çıkış yapılabilir. Yenileme tamamlanmadan tekrar giriş gerekiyorsa geçici parola yalnızca kalan süresi içinde bu sınırlı ekranı açar; tek bir giriş denemesinden sonra tüketilmez. Süre dolarsa yeniden sıfırlama gerekir.</p>
+<h2 id="deneyebilecegin-kontroller">Deneyebileceğin kontroller</h2>
+<p>Gerçek hesabını değiştirmek istemiyorsan ikinci bir yönetici oturumunu açık tutup yalnızca deneme hesabıyla çalış.</p>
+<table>
+<thead>
+<tr>
+<th>Deneme</th>
+<th>Beklenen sonuç</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Görüntüleyici hesabıyla kendi parolasını değiştir</td>
+<td>Kaydetme etkin; yeni parola ile giriş başarılı</td>
+</tr>
+<tr>
+<td>Yanlış mevcut parola veya farklı parola tekrarı</td>
+<td>İşlem reddedilir, eski parola geçerli kalır</td>
+</tr>
+<tr>
+<td>Aynı parolayı yeniden seç</td>
+<td>Reddedilir</td>
+</tr>
+<tr>
+<td>Sıfırlamada yanlış yönetici parolası</td>
+<td>Hedef hesap değişmez</td>
+</tr>
+<tr>
+<td>Başka bir oturumu açık hedef hesabı sıfırla</td>
+<td>Eski oturum en geç 30 saniyelik kontrolde girişe döner; veri işlemleri hemen reddedilir</td>
+</tr>
+<tr>
+<td>Geçici parolayla giriş yap</td>
+<td>Yalnızca parola yenileme ekranı açılır</td>
+</tr>
+<tr>
+<td>Yeni parola belirledikten sonra geçici parolayı kullan</td>
+<td>Giriş başarısız</td>
+</tr>
+<tr>
+<td>Aynı hesabı yeniden sıfırla</td>
+<td>Önceki geçici parola ve sınırlı oturum geçersiz olur</td>
+</tr>
+<tr>
+<td>Hesap listesini veya raporunu aç</td>
+<td>Parola, hash ve oturum belirteçleri görünmez</td>
+</tr>
+</tbody>
+</table>
+<h2 id="teknik-korumalar-ve-dogrulama">Teknik korumalar ve doğrulama</h2>
+<p>Parolalar PBKDF2-HMAC-SHA256 ile 600.000 yineleme, ayrı rastgele 16 bayt salt ve 32 bayt hash kullanılarak saklanır. Geçici parola 24 bayt kriptografik rastgele veriden oluşturulur; veritabanında yalnızca hash'i tutulur. Yeni parola, geçici parola, eski parola ve hash listelere, Excel/CSV'ye veya uygulama günlüklerine yazılmaz. Kullanıcı listesi yenileme gereğini ve geçici parola son tarihini gösterebilir.</p>
+<p>Parola değişimi/sıfırlama ile audit kaydı aynı transaction içindedir; audit yazımı başarısızsa parola değişimi geri alınır. Hash hesaplanırken kilit açık tutulmaz; yazmadan önce oturum, yetki ve seçili hesap sürümü tekrar kontrol edilir. Eşzamanlı iki parola değişiminden yalnızca biri başarılı olur. Oturum sürümü ve epoch yenilenir; eski yetki veya geçici oturum yeniden kullanılamaz.</p>
+<p>Bu akışta mevcut parolayı yeniden doğrulama, uzun parolaları ve boşlukları kabul etme tercihleri <a href="https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html">OWASP Authentication Cheat Sheet</a> ile; rastgele, hash'lenmiş, süreli sıfırlama bilgisi ve oturum iptali tercihleri <a href="https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html">OWASP Forgot Password Cheat Sheet</a> ile desteklenir. Bu çalışma giriş denemesi sınırlaması veya sızmış parola listesi kontrolü eklemez; bunlar ayrıca ele alınmalıdır.</p>
+<p>Tam regresyon: <strong>364 başarılı, 0 başarısız, 0 atlanan</strong>; Release derlemesi uyarıları hata sayarak başarılı. Kanıt: <code>artifacts/analysis/master-20261025-083517-979/master.trx</code> ve <code>summary.json</code>. Testler ayrı geçici LocalDB motorunda çalıştı; gerçek hesap parolaları değiştirilmedi. Kapsam: bütün roller, yanlış parola, tekrar doğrulama, süre sonu, art arda sıfırlama, eski oturum, eski hedef seçimi, yeniden oluşturulmuş hesap, audit hatasında rollback, eşzamanlı değişim, liste/rapor/günlük gizliliği ve sınırlı ekran yönlendirmesi.</p>
+<h2 id="guncelleme">Güncelleme</h2>
+<p>Eski uygulama kopyalarını kapatıp güncel masaüstü kısayolundan yeniden aç. İlk giriş hazırlığı <code>103-password-change-reset.sql</code> şema yükseltmesinden önce doğrulanmış güvenlik yedeği alır. Mevcut hesaplar zorunlu parola değişimine alınmaz; veri ve mevcut parola hash'leri korunur. Bu çalışma sırasında gerçek veritabanına şema yükseltmesi veya parola değişimi uygulanmadı; hazırlık sonraki açılışta çalışır. Eski uygulama sürümlerini aynı veritabanıyla birlikte kullanma.</p>
+<p>Kaynak değişikliklerinin tarihçesi <a href="../CHANGELOG.md">değişiklik günlüğündedir</a>. Eski v1.0.0 Release indirmesi bu geliştirmeleri içermez.</p>
+</main></body></html>

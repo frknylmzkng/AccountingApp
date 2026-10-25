@@ -61,8 +61,7 @@ namespace WinFormsApp2
 
             PersonnelDetails? person = ReadInputs();
             if (person == null) return;
-            decimal originalAmount = RecordSelection.OriginalAmount(calisanView);
-            await ApplyChangeAsync(token => People.SaveAsync(PersonnelGroup.General, person, false, token, originalAmount), "Çalışan bilgileri güncellendi. İzin tarihleri korundu.");
+            await ApplyChangeAsync(token => People.SaveAsync(PersonnelGroup.General, person, false, token, RecordSelection.OriginalVersion(calisanView)), "Çalışan bilgileri güncellendi. İzin tarihleri korundu.");
         }
 
         private async void izinKaydet_btn_Click(object sender, EventArgs e)

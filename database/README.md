@@ -42,7 +42,7 @@ Dağıtım klasörünün tamamını kullanın. .NET çalışma bileşenleri ve k
 powershell -NoProfile -ExecutionPolicy Bypass -File .\database\Install-Database.ps1
 ```
 
-4. İlk yönetici kullanıcı adını, parolayı ve parola tekrarını girin. Terminalde parola yıldızlarla gösterilir; komut satırı argümanına veya PowerShell geçmişine yazılmaz. Kullanıcı adı 1–50, yeni parola 6–1024 karakter olmalıdır. Başta/sonda bulunan parola boşlukları korunur.
+4. İlk yönetici kullanıcı adını, parolayı ve parola tekrarını girin. Terminalde parola yıldızlarla gösterilir; komut satırı argümanına veya PowerShell geçmişine yazılmaz. Kullanıcı adı 1–50, yeni parola 15–1024 karakter olmalıdır. Başta/sonda bulunan parola boşlukları korunur.
 5. Kurulum tamamlandıktan sonra `WinFormsApp2.exe` dosyasını açın ve oluşturduğunuz hesapla giriş yapın.
 
 Başka bir ayar dosyası kullanmak için:

@@ -5,17 +5,21 @@ namespace WinFormsApp2
         private readonly Func<AppPage, Form> createForm;
         private bool switching;
         private bool exiting;
-        private bool backgroundBackups;
+        private bool backgroundServices;
         private System.Windows.Forms.Timer? backupTimer;
         private CancellationTokenSource? sessionLifetime;
         private bool backupRunning;
+        private System.Windows.Forms.Timer? sessionTimer;
+        private bool sessionChecking;
+        private bool sessionRevoked;
+        internal Func<UserSession, CancellationToken, Task<bool>>? SessionValidator { get; set; }
 
         internal string? Username { get; private set; }
         internal UserSession? Session { get; private set; }
         internal bool IsAuthenticated => Username != null;
         internal AppPage? CurrentPage { get; private set; }
 
-        public AccountingApplicationContext() : this(CreateForm) { backgroundBackups = true; }
+        public AccountingApplicationContext() : this(CreateForm) { backgroundServices = true; }
 
         internal AccountingApplicationContext(Func<AppPage, Form> createForm)
         {
@@ -23,45 +27,56 @@ namespace WinFormsApp2
             SwitchTo(AppPage.Login);
         }
 
-        internal bool StartSession(string username, UserRole role = UserRole.Admin)
+        internal bool StartSession(string username, UserRole role = UserRole.Admin) => StartSession(new UserSession(username, role));
+
+        internal bool StartSession(UserSession user)
         {
             if (exiting || switching || CurrentPage != AppPage.Login || IsAuthenticated ||
-                string.IsNullOrWhiteSpace(username) || !Enum.IsDefined(role))
+                string.IsNullOrWhiteSpace(user.Username) || !Enum.IsDefined(user.Role))
                 return false;
 
-            Username = username;
-            Session = new UserSession(username, role);
-            try { SwitchTo(AppPage.Dashboard); }
+            Username = user.Username;
+            Session = user;
+            sessionRevoked = false;
+            try { SwitchTo(user.MustChangePassword ? AppPage.PasswordChange : AppPage.Dashboard); }
             catch { Username = null; Session = null; throw; }
-            if (backgroundBackups && role == UserRole.Admin)
+            if (backgroundServices)
             {
                 sessionLifetime = new();
-                backupTimer = new System.Windows.Forms.Timer { Interval = 3600000 };
-                backupTimer.Tick += async (_, _) => await DailyBackupAsync(); backupTimer.Start();
-                _ = DailyBackupAsync();
+                SessionValidator ??= (current, token) => AccountAuthorization.IsCurrentAsync(AppDatabase.ConnectionString, current, token);
+                sessionTimer = new System.Windows.Forms.Timer { Interval = 30000 };
+                sessionTimer.Tick += async (_, _) => await CheckSessionAsync(); sessionTimer.Start();
+                if (user.Role == UserRole.Admin && !user.MustChangePassword)
+                {
+                    backupTimer = new System.Windows.Forms.Timer { Interval = 3600000 };
+                    backupTimer.Tick += async (_, _) => await DailyBackupAsync(); backupTimer.Start();
+                    _ = DailyBackupAsync();
+                }
             }
             return true;
         }
 
         internal bool Navigate(AppPage page)
         {
-            if (exiting || switching || !IsAuthenticated || page == AppPage.Login ||
+            if (sessionRevoked) { Logout(SessionRevokedException.Notice); return false; }
+            if (exiting || switching || !IsAuthenticated || MainForm is SessionForm { IsOperationRunning: true } || page == AppPage.Login ||
                 !Enum.IsDefined(typeof(AppPage), page))
                 return false;
             if (page is AppPage.Admin or AppPage.Settings && Session?.Role != UserRole.Admin) return false;
+            if (Session?.MustChangePassword == true && page != AppPage.PasswordChange) return false;
             if (CurrentPage != page) SwitchTo(page);
             return true;
         }
 
-        internal void Logout()
+        internal void Logout(string? notice = null)
         {
-            if (exiting || switching || !IsAuthenticated) return;
+            if (exiting || switching || !IsAuthenticated || MainForm is SessionForm { IsOperationRunning: true }) return;
             StopBackgroundWork();
             Username = null;
             Session = null;
             AppLog.Event("Session.Logout");
             AppDatabase.Reset();
-            try { SwitchTo(AppPage.Login); }
+            try { SwitchTo(AppPage.Login); if (notice != null && MainForm is Giris login) login.SetSessionNotice(notice); }
             catch
             {
                 // A failed return to login must never leave a protected screen available.
@@ -128,6 +143,7 @@ namespace WinFormsApp2
             {
                 screen.PageRequested += OnPageRequested;
                 screen.LogoutRequested += OnLogoutRequested;
+                screen.SessionRevoked += OnSessionRevoked;
             }
         }
 
@@ -138,12 +154,13 @@ namespace WinFormsApp2
             {
                 screen.PageRequested -= OnPageRequested;
                 screen.LogoutRequested -= OnLogoutRequested;
+                screen.SessionRevoked -= OnSessionRevoked;
             }
         }
 
         private void OnLoginSucceeded(object? sender, LoginSucceededEventArgs e)
         {
-            if (ReferenceEquals(sender, MainForm)) StartSession(e.Username, e.Role);
+            if (ReferenceEquals(sender, MainForm)) StartSession(e.Session);
         }
 
         private void OnPageRequested(object? sender, PageRequestedEventArgs e)
@@ -160,12 +177,39 @@ namespace WinFormsApp2
         private void OnLogoutRequested(object? sender, EventArgs e)
         {
             if (!ReferenceEquals(sender, MainForm)) return;
-            try { Logout(); }
+            try { Logout((sender as SessionForm)?.LogoutNotice); }
             catch (Exception)
             {
                 MessageBox.Show("Giriş ekranı açılamadı. Uygulamayı yeniden açın.", "Hata",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void OnSessionRevoked(object? sender, EventArgs e)
+        {
+            if (!ReferenceEquals(sender, MainForm)) return;
+            sessionRevoked = true;
+            Logout(SessionRevokedException.Notice);
+        }
+
+        internal async Task CheckSessionAsync()
+        {
+            if (sessionChecking || Session == null || SessionValidator == null) return;
+            var checkedSession = Session;
+            var token = sessionLifetime?.Token ?? CancellationToken.None;
+            sessionChecking = true;
+            try
+            {
+                if (!sessionRevoked && !await SessionValidator(checkedSession, token))
+                {
+                    if (!ReferenceEquals(Session, checkedSession)) return;
+                    sessionRevoked = true;
+                }
+                if (ReferenceEquals(Session, checkedSession) && sessionRevoked) Logout(SessionRevokedException.Notice);
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+            catch (Exception ex) { AppLog.Failure(ex, "Session.Check"); }
+            finally { sessionChecking = false; }
         }
 
         private async Task DailyBackupAsync()
@@ -175,6 +219,10 @@ namespace WinFormsApp2
             var user = Session; var token = sessionLifetime.Token;
             try { await new BackupService(AppDatabase.ConnectionString, user).EnsureDailyAsync(token); }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+            catch (SessionRevokedException)
+            {
+                if (ReferenceEquals(Session, user)) { sessionRevoked = true; Logout(SessionRevokedException.Notice); }
+            }
             catch (Exception ex)
             {
                 AppLog.Failure(ex, "Backup.Daily");
@@ -185,6 +233,7 @@ namespace WinFormsApp2
         private void StopBackgroundWork()
         {
             backupTimer?.Dispose(); backupTimer = null;
+            sessionTimer?.Dispose(); sessionTimer = null;
             sessionLifetime?.Cancel(); sessionLifetime?.Dispose(); sessionLifetime = null;
         }
 
@@ -247,6 +296,7 @@ namespace WinFormsApp2
             AppPage.Payments => new PaymentsForm(),
             AppPage.Settings => new SettingsForm(),
             AppPage.LeavePlan => new LeavePlanForm(),
+            AppPage.PasswordChange => new PasswordChangeForm(),
             _ => throw new ArgumentOutOfRangeException(nameof(page))
         };
     }

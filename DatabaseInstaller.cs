@@ -128,6 +128,7 @@ namespace WinFormsApp2
                 {
                     InitialAdminAccount account = requestInitialAdmin();
                     string username = AdminStore.ValidateNewAccount(account.Username, account.Password);
+                    PasswordPolicy.Validate(account.Password, account.Password);
                     string hash = PasswordHasher.Hash(account.Password);
                     using var insert = new SqlCommand(
                         "INSERT INTO dbo.admin(username,password,password_hash) VALUES(@Username,N'',@Hash)", connection, transaction);

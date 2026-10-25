@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Muhasebe — Hatalı giriş kılavuzu</title>
+<style>
+:root{color-scheme:light;font-family:Segoe UI,Arial,sans-serif;color:#17283d;background:#f0f4f8;font-size:16px;line-height:1.7}body{margin:0}.toolbar{position:sticky;top:0;background:#18304e;color:white;padding:12px 24px;display:flex;gap:20px;align-items:center;justify-content:space-between}.toolbar strong{font-size:15px}.toolbar button{border:0;border-radius:6px;padding:9px 16px;background:#fff;color:#18304e;cursor:pointer;font:inherit}main{max-width:1000px;margin:24px auto 60px;padding:40px 48px;background:#fff;box-shadow:0 2px 16px #182e5010;border-radius:10px}h1{line-height:1.2;color:#173759;font-size:2.1rem;margin-top:0}h2{margin-top:2.2rem;padding-top:1rem;border-top:2px solid #e6edf4;font-size:1.35rem;color:#1b4973}strong{color:#153e62}.toolbar strong{color:white}table{border-collapse:collapse;width:100%;margin:18px 0;font-size:.96rem}th,td{border:1px solid #d8e2ed;text-align:left;padding:10px 14px;vertical-align:top}th{background:#eaf1f8}tr:nth-child(even){background:#f8fafc}li{padding:3px 0}blockquote{margin:18px 0;padding:14px 20px;border-left:5px solid #f0ac36;background:#fff7e6}blockquote p{margin:0}input[type=checkbox]{width:18px;height:18px;accent-color:#1d628d}code{background:#eef3f8;padding:2px 5px;border-radius:4px}a{color:#145f96}p,li{overflow-wrap:anywhere}@media(max-width:700px){main{margin:0;padding:24px 18px;border-radius:0}h1{font-size:1.65rem}.toolbar{padding:10px 16px}th,td{padding:8px}}@media print{.toolbar{display:none}body{background:#fff}main{margin:0;padding:0;max-width:none;box-shadow:none}h2{break-after:avoid}tr,blockquote{break-inside:avoid}h1{font-size:24pt}h2{font-size:15pt}body{font-size:10.5pt;line-height:1.45}a{color:inherit;text-decoration:none}@page{size:A4;margin:18mm}}
+</style></head><body><div class="toolbar"><strong>Muhasebe · Kullanıcı kılavuzu</strong><button onclick="window.print()">Yazdır / PDF olarak kaydet</button></div><main><h1 id="hatal-giris-denemelerini-snrlama">Hatalı giriş denemelerini sınırlama</h1>
+<p>25 Ekim 2026. Yerel paket: <code>artifacts/releases/login-throttle/WinFormsApp2.exe</code>.</p>
+<h2 id="davrans">Davranış</h2>
+<table>
+<thead>
+<tr>
+<th>Kural</th>
+<th>Sonuç</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Aynı hesapta 15 dakika içinde 5 hatalı parola</td>
+<td>Hesabın yeni girişleri 5 dakika durdurulur</td>
+</tr>
+<tr>
+<td>Kilit sürerken doğru parola</td>
+<td>Giriş kabul edilmez; sürenin dolması gerekir</td>
+</tr>
+<tr>
+<td>Kilit sürerken başka hatalı deneme</td>
+<td>Süre uzatılmaz</td>
+</tr>
+<tr>
+<td>Kilit dolduktan sonra yeni hata</td>
+<td>Yeni pencere ve 1 hata ile başlanır</td>
+</tr>
+<tr>
+<td>Kilitlenmeden önce doğru parola</td>
+<td>Hata sayacı temizlenir</td>
+</tr>
+<tr>
+<td>15 dakikalık hata penceresinin dolması</td>
+<td>Sonraki hata yeni pencereyi başlatır</td>
+</tr>
+<tr>
+<td>Uygulamayı kapatıp açmak, farklı pencere veya kullanıcı adı yazımı</td>
+<td>Sayacı sıfırlamaz; denemeler aynı veritabanı hesabına bağlanır</td>
+</tr>
+<tr>
+<td>Başka hesabın girişleri</td>
+<td>Etkilenmez</td>
+</tr>
+</tbody>
+</table>
+<p>Ekranda bütün reddedilen girişler için aynı mesaj görünür: <strong>“Giriş yapılamadı. Bilgilerinizi kontrol edin; art arda hatalı deneme yaptıysanız 5 dakika bekleyip yeniden deneyin.”</strong> Mesaj, hesabın varlığını veya kilitli olup olmadığını açıklamaz. Bağlantı/kurulum hataları önceki gibi ayrı hata koduyla bildirilir; hatalı parola sayılmaz.</p>
+<p>Kilit yalnızca yeni girişleri ve mevcut parolayla yeniden doğrulamayı sınırlar. Zaten açık ve geçerli oturumlar kapanmaz; personel ve ödeme işlemleri mevcut yetki kontrolleriyle çalışmayı sürdürür. Giriş denemeleri hesap satırını veya oturum sürümünü değiştirmez.</p>
+<h2 id="parola-islemleri-ve-kurtarma">Parola işlemleri ve kurtarma</h2>
+<p><strong>Parolamı değiştir</strong> ekranındaki mevcut parola kontrolü ve yönetici sıfırlamasında girilen yönetici parolası aynı hesap sayacını kullanır. Böylece giriş ekranı dışında sınırsız parola tahmini yapılabilecek ikinci bir yol oluşmaz. Yanlış yeni parola tekrarı gibi form doğrulama hataları parola tahmini sayılmaz.</p>
+<p>Kilitliyken mevcut parolan doğru olsa da bu yeniden doğrulamalar reddedilir. 5 dakika dolduktan sonra yeniden dene. Başka bir etkin yönetici, kendi parolasını doğrulayarak kilitli hesabı sıfırlayabilir. Başarılı sıfırlama hedef hesabın eski sayacını temizler; yeni geçici parola önceki gibi 30 dakika geçerlidir ve zorunlu parola değiştirme ekranını açar. Geçici parola da hatalı giriş sınırına tabidir.</p>
+<p>Hesap silinip aynı adla yeniden oluşturulursa eski hatalar yeni hesaba taşınmaz. Onaylı yedek geri yükleme bütün oturum kimliklerini yenilediğinden giriş sayaçlarını da temizler.</p>
+<h2 id="deneme-admlar">Deneme adımları</h2>
+<p>Denemeler için bir görüntüleyici hesabı kullan; ayrı yönetici oturumunu açık tut.</p>
+<ol>
+<li>Deneme hesabının kullanıcı adıyla dört kez yanlış parola gir.</li>
+<li>Beşinci denemede doğru parolayı kullan: giriş başarılı olmalı. Çıkış yap.</li>
+<li>Aynı hesapta bu kez beş kez yanlış parola gir. Ardından doğru parolayla dene: giriş reddedilmeli.</li>
+<li>Uygulamayı yeniden açıp doğru parolayla dene: aynı kilit sürmeli.</li>
+<li>Başka bir hesapla girişin çalıştığını kontrol et.</li>
+<li>Kilitli hesapta 5 dakika dolduktan sonra doğru parolayla giriş yap: başarılı olmalı. Kilit sırasında yapılan denemeler süreyi uzatmaz.</li>
+<li>İkinci bir denemede hedef hesabı kilitle ve yönetici hesabından parolasını sıfırla. Yeni geçici parolayla yalnızca parola yenileme ekranı açılmalı; yeni parola belirlenince normal giriş çalışmalı.</li>
+</ol>
+<p>Gerçek hesabını kilitlersen uygulamayı yeniden kurmana gerek yok; kilidin dolmasını bekle. Parolanı kimseyle paylaşmadan bu adımları deneyebilirsin.</p>
+<h2 id="uygulama">Uygulama</h2>
+<p>Yeni <code>104-login-throttle.sql</code> betiği ayrı <code>LoginThrottle</code> tablosunu ekler. Tabloda yalnızca hesap epoch kimliği, hata sayısı ve UTC zamanları tutulur; kullanıcı adı, açık parola veya parola hash'i bulunmaz. Önceden uygulanmış migration dosyaları değiştirilmedi. Yeni sürüm ilk giriş hazırlığında doğrulanmış yedek alıp betiği uygular.</p>
+<p>Sayaç ve kilit kontrolleri veritabanı saatini kullanır. Aynı hesap için SQL oturumuna bağlı uygulama kilidi, farklı istemcilerden gelen doğrulamaları sıraya alır. PBKDF2 hesaplanırken SQL transaction'ı veya satır kilidi açık tutulmaz. İstemci iptali sırasında bağlantı havuzunda kilit bırakılmaması için oturum kilidi açıkça bırakılır; belirsiz bağlantı havuza geri verilmez. Başarılı girişte sayaç temizliği ve <code>Login.Success</code> audit kaydı aynı transaction içinde tamamlanır.</p>
+<p>Bulunmayan, pasif, süresi geçmiş geçici parolalı ve kilitli hesaplarda da sahte bir hash ile parola hesaplaması yapılır; bu, erken çıkışlardan kaynaklanan süre farklarını azaltır. Mutlak zaman eşitliği iddiası yoktur. Reddedilen girişler için uygulama günlükleri yalnızca sabit <code>Login.Rejected</code> / <code>Login.Locked</code> olaylarını tutar; girilen kullanıcı adı ve parola yazılmaz.</p>
+<p>Hesap başına sayaç, gözlem penceresi, süreli kilit ve parola kurtarmayla erişim sağlama tercihleri <a href="https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html#login-throttling">OWASP Authentication Cheat Sheet</a> ile desteklenir. 5 deneme / 15 dakika / 5 dakika değerleri bu uygulamanın yerel kullanımına yönelik uygulama kararıdır; OWASP'ın zorunlu sayıları değildir. Doğrudan SQL erişimi olan Windows kullanıcısının yetkileri SQL Server/Windows izinleriyle yönetilir.</p>
+<h2 id="guncelleme">Güncelleme</h2>
+<p>Eski uygulama kopyalarını kapatıp <strong>Muhasebe - Güncel</strong> kısayolundan aç. Bütün istemciler aynı güncel sürümü kullanmalıdır. Bu çalışma sırasında gerçek hesaplara hatalı deneme yapılmadı veya parola değişikliği uygulanmadı; şema yükseltmesi sonraki açılışta çalışır. Yerel paket henüz GitHub Releases'e yayımlanmadı.</p>
+<h2 id="dogrulama">Doğrulama</h2>
+<p>Tam regresyon <strong>383 başarılı, 0 başarısız, 0 atlanan</strong>; uyarıları hata sayan Release derlemesi başarılı. Önceki sürüme göre 19 yeni test durumu eklendi. Kanıt: <code>artifacts/analysis/master-20261025-090245-255/master.trx</code>, <code>summary.json</code> ve <code>RAPOR.md</code>. Ayrı geçici LocalDB motoru test sonunda kaldırıldı.</p>
+<p>Yeni senaryolar bütün roller, beşinci hata sınırı, doğru parolayla sayaç temizleme, kalıcı sayaç ve kullanıcı adı varyasyonları, başka hesabın etkilenmemesi, kilit/gözlem penceresi sonu, 12 eşzamanlı deneme, eski boolean giriş yolunun korunması, geçici parola, parola işlemlerindeki ortak limit, sıfırlamayla kurtarma, silinip yeniden oluşturulan hesap, audit hatasında geri alma, iptal edilen kilit beklemesi ve şema yükseltmesinde verilerin/oturumların korunmasını kapsar.</p>
+</main></body></html>

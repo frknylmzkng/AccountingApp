@@ -1,4 +1,6 @@
-﻿# Rehber uygulaması doğrulama sonuçları
+# Rehber uygulaması doğrulama sonuçları
+
+**25 Ekim 2026 güncellemesi:** Tam regresyon 383 başarılı, 0 başarısız, 0 atlanan; Release derlemesi ve self-contained paket üretimi başarılı. Kanıt: artifacts/analysis/master-20261025-090245-255/. İzole test motoru temizlendi. Özellik bazında tarihçe [değişiklik günlüğündedir](../CHANGELOG.md). Aşağıdaki eski kayıtlar tarihsel doğrulamadır; uzak GitHub Actions sonucu yerel testten ayrıdır.
 
 24 Ekim 2026; rehber uyarlamasının başlangıç Git kaydı: 03a9dcf. Son LocalDB başlangıcı düzeltmesi: 260/260 test başarılı; ayrıntılar LOCALDB_GIRIS_DUZELTMESI.md dosyasındadır. Güncel paket artifacts/releases/localdb-startup-fix klasöründedir.
 

@@ -75,8 +75,15 @@ namespace WinFormsApp2
             using (var connection = new SqlConnection(connectionString))
             {
                 connection.Open();
+                using var throttleSchema = new SqlCommand("SELECT OBJECT_ID(N'dbo.LoginThrottle')", connection);
+                if (throttleSchema.ExecuteScalar() is not DBNull and not null)
+                    return new AccountService(connectionString).AuthenticateAsync(username.Trim(), password).GetAwaiter().GetResult() is { MustChangePassword: false };
+                using var stateSchema = new SqlCommand("SELECT CASE WHEN COL_LENGTH(N'dbo.admin',N'IsActive') IS NULL THEN 0 ELSE 1 END", connection);
+                bool hasState = Convert.ToInt32(stateSchema.ExecuteScalar()) == 1;
+                using var resetSchema = new SqlCommand("SELECT CASE WHEN COL_LENGTH(N'dbo.admin',N'MustChangePassword') IS NULL THEN 0 ELSE 1 END", connection);
+                bool hasReset = Convert.ToInt32(resetSchema.ExecuteScalar()) == 1;
                 using var select = new SqlCommand(
-                    "SELECT TOP (2) password_hash FROM dbo.admin WHERE username = @username", connection);
+                    "SELECT TOP (2) password_hash FROM dbo.admin WHERE username = @username" + (hasState ? " AND IsActive=1" : "") + (hasReset ? " AND MustChangePassword=0" : ""), connection);
                 select.Parameters.AddWithValue("@username", username.Trim());
                 using var reader = select.ExecuteReader();
                 if (!reader.Read() || reader.IsDBNull(0)) return false;

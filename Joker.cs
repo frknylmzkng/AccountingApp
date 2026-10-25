@@ -60,8 +60,7 @@ namespace WinFormsApp2
 
             PersonnelDetails? person = ReadInputs();
             if (person == null) return;
-            decimal originalAmount = RecordSelection.OriginalAmount(jokerView);
-            await ApplyChangeAsync(token => People.SaveAsync(PersonnelGroup.Joker, person, false, token, originalAmount),
+            await ApplyChangeAsync(token => People.SaveAsync(PersonnelGroup.Joker, person, false, token, RecordSelection.OriginalVersion(jokerView)),
                 "Veri başarıyla güncellendi!");
         }
 

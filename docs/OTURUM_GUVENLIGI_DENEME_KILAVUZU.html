@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Muhasebe — Oturum güvenliği kılavuzu</title>
+<style>
+:root{color-scheme:light;font-family:Segoe UI,Arial,sans-serif;color:#17283d;background:#f0f4f8;font-size:16px;line-height:1.7}body{margin:0}.toolbar{position:sticky;top:0;background:#18304e;color:white;padding:12px 24px;display:flex;gap:20px;align-items:center;justify-content:space-between}.toolbar strong{font-size:15px}.toolbar button{border:0;border-radius:6px;padding:9px 16px;background:#fff;color:#18304e;cursor:pointer;font:inherit}main{max-width:1000px;margin:24px auto 60px;padding:40px 48px;background:#fff;box-shadow:0 2px 16px #182e5010;border-radius:10px}h1{line-height:1.2;color:#173759;font-size:2.1rem;margin-top:0}h2{margin-top:2.2rem;padding-top:1rem;border-top:2px solid #e6edf4;font-size:1.35rem;color:#1b4973}strong{color:#153e62}.toolbar strong{color:white}table{border-collapse:collapse;width:100%;margin:18px 0;font-size:.96rem}th,td{border:1px solid #d8e2ed;text-align:left;padding:10px 14px;vertical-align:top}th{background:#eaf1f8}tr:nth-child(even){background:#f8fafc}li{padding:3px 0}blockquote{margin:18px 0;padding:14px 20px;border-left:5px solid #f0ac36;background:#fff7e6}blockquote p{margin:0}input[type=checkbox]{width:18px;height:18px;accent-color:#1d628d}code{background:#eef3f8;padding:2px 5px;border-radius:4px}a{color:#145f96}p,li{overflow-wrap:anywhere}@media(max-width:700px){main{margin:0;padding:24px 18px;border-radius:0}h1{font-size:1.65rem}.toolbar{padding:10px 16px}th,td{padding:8px}}@media print{.toolbar{display:none}body{background:#fff}main{margin:0;padding:0;max-width:none;box-shadow:none}h2{break-after:avoid}tr,blockquote{break-inside:avoid}h1{font-size:24pt}h2{font-size:15pt}body{font-size:10.5pt;line-height:1.45}a{color:inherit;text-decoration:none}@page{size:A4;margin:18mm}}
+</style></head><body><div class="toolbar"><strong>Muhasebe · Kullanıcı kılavuzu</strong><button onclick="window.print()">Yazdır / PDF olarak kaydet</button></div><main><h1 id="muhasebe-oturum-guvenligi-deneme-klavuzu">Muhasebe — Oturum güvenliği deneme kılavuzu</h1>
+<p>25 Ekim 2026 · Güncel sürüm: session-revocation</p>
+<p>Bu deneme, pasife alınan veya silinen hesabın açık uygulamada işlem yapamadığını gösterir. Mevcut yöneticini silme; yalnızca bu deneme için açacağın hesabı kullan.</p>
+<h2 id="iki-guncel-pencere-hazrla">1. İki güncel pencere hazırla</h2>
+<ol>
+<li>Eski sürümün bütün açık kopyalarını kapat. Masaüstündeki <strong>Muhasebe - Güncel</strong> kısayolunu aç; giriş hazırlığı tamamlanınca yönetici hesabınla giriş yap. Bu pencereye <strong>A</strong> diyelim.</li>
+<li><strong>YÖNETİCİ BİLGİLERİ İŞLEMLERİ</strong> ekranına gir. Kullanılmayan bir kullanıcı adı (örneğin <strong>deneme-oturum</strong>) ve kendi belirlediğin şifreyle <strong>Personel sorumlusu</strong> yetkisinde deneme hesabı ekle.</li>
+<li>Masaüstü kısayolunu yeniden çift tıklayıp ikinci uygulamayı aç. Burada deneme hesabıyla giriş yap; bu pencereye <strong>B</strong> diyelim.</li>
+<li>B'de <strong>GENEL PERSONEL İŞLEMLERİ</strong> ekranını aç. İki pencere de aynı veritabanı profilini kullanmalı.</li>
+</ol>
+<h2 id="pasife-alma-ve-ack-oturum-kontrolu">2. Pasife alma ve açık oturum kontrolü</h2>
+<ol>
+<li>A'daki hesap listesinden yalnızca <strong>deneme-oturum</strong> hesabını seç.</li>
+<li><strong>Pasife al</strong> düğmesine basıp hesabın adını kontrol ederek onayla. Listedeki <strong>Etkin</strong> işareti kalkmalı.</li>
+<li>B'de <strong>F5</strong>'e bas.</li>
+</ol>
+<p><strong>Beklenen sonuç:</strong> B yeniden giriş ekranına döner. Hesabın veya yetkinin değişmesi nedeniyle oturumun sona erdiği mesajı görünür. Pasif hesapla aynı şifreyi kullanarak tekrar giriş yapamazsın. Giriş reddi genel kullanıcı adı/şifre mesajı olarak gösterilir.</p>
+<p>F5'e basmadan beklemeyi de deneyebilirsin: boşta kalan B penceresi yaklaşık 30 saniye içindeki kontrolde giriş ekranına dönmeli. Süren bir işlem varsa önce tamamlanması beklenebilir.</p>
+<h2 id="yeniden-etkinlestirme">3. Yeniden etkinleştirme</h2>
+<ol>
+<li>A'da aynı hesabı seç, <strong>Etkinleştir</strong> düğmesine bas ve onayla.</li>
+<li>B'nin açık personel ekranına kendiliğinden dönmediğini gör. Yeniden giriş yapmak gerekir.</li>
+<li>B'de deneme hesabının kullanıcı adı ve şifresiyle giriş yap. Artık ekranları normal kullanabilmelisin.</li>
+</ol>
+<p><strong>Beklenen sonuç:</strong> Yeni giriş başarılıdır. Pasife alınmadan önceki oturum yeniden canlanmaz.</p>
+<h2 id="yazma-isleminin-engellenmesini-deneme-istege-bagl">4. Yazma işleminin engellenmesini deneme — isteğe bağlı</h2>
+<ol>
+<li>B'de yalnızca deneme için oluşturduğun bir personel kaydını seç. Ad alanına bir deneme değişikliği yaz; henüz DÜZENLE'ye basma.</li>
+<li>A'da deneme hesabını tekrar pasife al.</li>
+<li>B henüz giriş ekranına dönmediyse hemen <strong>DÜZENLE</strong>'ye bas. Zaten giriş ekranına dönmüşse oturum iptali gerçekleşmiştir.</li>
+</ol>
+<p><strong>Beklenen sonuç:</strong> Değişiklik kaydedilmez; B giriş ekranına döner. A'da personel listesini yenileyerek adın değişmediğini kontrol edebilirsin. Bu adım için gerçek personel yerine önceki personel deneme kılavuzundaki deneme kaydını kullan.</p>
+<h2 id="ayn-kullanc-adyla-yeniden-olusturma-istege-bagl">5. Aynı kullanıcı adıyla yeniden oluşturma — isteğe bağlı</h2>
+<ol>
+<li>A'da deneme hesabını etkinleştir; B'de onunla yeniden giriş yap ve Genel ekranını açık bırak.</li>
+<li>A'da yalnızca deneme hesabını <strong>SİL</strong> ile kaldır.</li>
+<li>Aynı kullanıcı adıyla tekrar Personel sorumlusu hesabı oluştur. Şifreyi aynı seçmen de mümkündür.</li>
+<li>B hâlâ eski ekrandaysa F5'e bas.</li>
+</ol>
+<p><strong>Beklenen sonuç:</strong> Eski B oturumu giriş ekranına döner. Kullanıcı adı aynı olsa bile yeniden oluşturulan hesap eski oturumla kullanılamaz; yeni hesabın bilgileriyle tekrar giriş gerekir.</p>
+<h2 id="bitirme-ve-kontrol-listesi">6. Bitirme ve kontrol listesi</h2>
+<p>Deneme bittiğinde A'dan yalnızca deneme hesabını silip B penceresini kapatabilirsin. Gerçek yönetici hesabını değiştirme. İşlem geçmişi korunur.</p>
+<ul class="contains-task-list">
+<li class="task-list-item"><input type="checkbox" /> Pasife alınan hesap yeniden giriş yapamıyor.</li>
+<li class="task-list-item"><input type="checkbox" /> Açık B penceresinde F5 yeni giriş istiyor.</li>
+<li class="task-list-item"><input type="checkbox" /> Boşta kalan pencere yaklaşık 30 saniyelik kontrolde kapanıyor.</li>
+<li class="task-list-item"><input type="checkbox" /> Etkinleştirme sonrasında yeni giriş gerekiyor ve başarılı oluyor.</li>
+<li class="task-list-item"><input type="checkbox" /> Pasif hesabın eski ekranından personel değişikliği kaydedilemiyor.</li>
+<li class="task-list-item"><input type="checkbox" /> Aynı kullanıcı adıyla yeniden oluşturmak eski oturuma yetki vermiyor.</li>
+</ul>
+<p>Beklenmeyen durumda hangi adımda olduğunu ve mesajı not et; şifreni paylaşmana gerek yok. Bu kılavuz için senin adına hesap oluşturulmadı, pasife alınmadı veya silinmedi. Parola değiştirme/sıfırlama ve hatalı giriş sınırlama ekranları bu değişikliğin kapsamında değildir.</p>
+</main><script>
+document.querySelectorAll('input[type=checkbox]').forEach((box,i)=>{try{box.checked=localStorage.getItem('muhasebe-oturum-guide-v1-'+i)==='1';box.addEventListener('change',()=>localStorage.setItem('muhasebe-oturum-guide-v1-'+i,box.checked?'1':'0'))}catch(e){}});
+</script></body></html>

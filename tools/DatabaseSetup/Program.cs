@@ -66,7 +66,7 @@ catch (SqlException ex) when (ex.Number == 51011)
 }
 catch (ArgumentException)
 {
-    Console.Error.WriteLine("Kullanıcı adı 1–50, şifre 6–1024 karakter olmalıdır. Kurulum değişiklikleri geri alındı.");
+    Console.Error.WriteLine("Kullanıcı adı 1–50, şifre 15–1024 karakter olmalıdır. Kurulum değişiklikleri geri alındı.");
     return 1;
 }
 catch (Exception ex)

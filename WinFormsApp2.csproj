@@ -25,6 +25,7 @@
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Update="database\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Update="docs\*.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="docs\*.html" CopyToPublishDirectory="PreserveNewest" />
     <None Update="README.md" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 

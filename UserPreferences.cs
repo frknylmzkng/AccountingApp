@@ -37,10 +37,19 @@ internal sealed class UserPreferences
 }
 internal static class AtomicFile
 {
-    public static void Write(string path, byte[] data)
+    public static void Write(string path, byte[] data, bool durable = false)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!); string temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try { File.WriteAllBytes(temp, data); File.Move(temp, path, true); }
+        try
+        {
+            if (durable)
+            {
+                using var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                stream.Write(data); stream.Flush(flushToDisk: true);
+            }
+            else File.WriteAllBytes(temp, data);
+            File.Move(temp, path, true);
+        }
         finally { if (File.Exists(temp)) File.Delete(temp); }
     }
 }
@@ -61,6 +70,6 @@ internal static class AppLog
 internal static class DraftStore
 {
     private static byte[] Entropy(string scope) => SHA256.HashData(Encoding.UTF8.GetBytes("AccountingApp.Draft.v1:" + scope));
-    internal static void Save(string path, string scope, object value) => AtomicFile.Write(path, ProtectedData.Protect(JsonSerializer.SerializeToUtf8Bytes(value), Entropy(scope), DataProtectionScope.CurrentUser));
+    internal static void Save(string path, string scope, object value, bool durable = false) => AtomicFile.Write(path, ProtectedData.Protect(JsonSerializer.SerializeToUtf8Bytes(value), Entropy(scope), DataProtectionScope.CurrentUser), durable);
     internal static T? Load<T>(string path, string scope) => JsonSerializer.Deserialize<T>(ProtectedData.Unprotect(File.ReadAllBytes(path), Entropy(scope), DataProtectionScope.CurrentUser));
 }

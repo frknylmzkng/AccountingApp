@@ -22,52 +22,58 @@ internal sealed class BackupService(string connectionString, UserSession user)
     public async Task<string> BackupAsync(string folder, string mirror = "", CancellationToken token = default)
     {
         user.DemandAdmin(); await Gate.WaitAsync(token).ConfigureAwait(false);
-        try
-        {
-            string name = await CatalogAsync(token).ConfigureAwait(false); ValidateCatalog(name);
-            Directory.CreateDirectory(folder); string path = Path.GetFullPath(Path.Combine(folder, Prefix(name) + DateTime.UtcNow.ToString("yyyyMMddTHHmmssfffffff") + "-" + Guid.NewGuid().ToString("N")[..12] + ".bak"));
-            if (path.Length > 259) throw new ArgumentException("SQL Server yedek yolu 259 karakteri geçemez. Daha kısa bir yedek klasörü seçin.");
-            await using var c = new SqlConnection(Master()); await c.OpenAsync(token).ConfigureAwait(false);
-            using var cmd = new SqlCommand($"BACKUP DATABASE {Identifier(name)} TO DISK={Literal(path)} WITH COPY_ONLY,INIT,CHECKSUM", c) { CommandTimeout = 180 };
-            try
-            {
-                await cmd.ExecuteNonQueryAsync(token).ConfigureAwait(false);
-                using var verify = new SqlCommand($"RESTORE VERIFYONLY FROM DISK={Literal(path)} WITH CHECKSUM", c) { CommandTimeout = 180 }; await verify.ExecuteNonQueryAsync(token).ConfigureAwait(false);
-                AtomicFile.Write(path + ".verified", Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("O")));
-            }
-            catch { if (File.Exists(path)) File.Delete(path); throw; }
-            Prune(folder, Prefix(name), 14);
-            if (!string.IsNullOrWhiteSpace(mirror))
-            {
-                try
-                {
-                    Directory.CreateDirectory(mirror); string target = Path.GetFullPath(Path.Combine(mirror, Path.GetFileName(path)));
-                    if (!string.Equals(target, path, StringComparison.OrdinalIgnoreCase))
-                    {
-                        string temporary = target + ".copying";
-                        try { File.Copy(path, temporary, true); File.Move(temporary, target, true); } finally { if (File.Exists(temporary)) File.Delete(temporary); }
-                    }
-                    Prune(mirror, Prefix(name), 14);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { AppLog.Failure(ex, "Backup.Mirror"); throw new IOException("Ana yedek alındı; aynalama klasörüne kopyalanamadı. Ana yedek korunuyor."); }
-            }
-            await RecordAuditAsync("Backup.Create", token).ConfigureAwait(false); return path;
-        }
+        try { return await BackupCoreAsync(folder, mirror, null, token).ConfigureAwait(false); }
         finally { Gate.Release(); }
     }
-    internal static void Prune(string folder, string prefix, int keep)
+    // Caller holds Gate; restore uses the same gate for validation, safety backup and restore.
+    private async Task<string> BackupCoreAsync(string folder, string mirror, string? protectedBackupPath, CancellationToken token)
+    {
+        await AccountAuthorization.ValidateAsync(connectionString, user, AccountAccess.Admin, token).ConfigureAwait(false);
+        string name = await CatalogAsync(token).ConfigureAwait(false); ValidateCatalog(name);
+        Directory.CreateDirectory(folder); string path = Path.GetFullPath(Path.Combine(folder, Prefix(name) + DateTime.UtcNow.ToString("yyyyMMddTHHmmssfffffff") + "-" + Guid.NewGuid().ToString("N")[..12] + ".bak"));
+        if (path.Length > 259) throw new ArgumentException("SQL Server yedek yolu 259 karakteri geçemez. Daha kısa bir yedek klasörü seçin.");
+        await using var c = new SqlConnection(Master()); await c.OpenAsync(token).ConfigureAwait(false);
+        using var cmd = new SqlCommand($"BACKUP DATABASE {Identifier(name)} TO DISK={Literal(path)} WITH COPY_ONLY,INIT,CHECKSUM", c) { CommandTimeout = 180 };
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+            using var verify = new SqlCommand($"RESTORE VERIFYONLY FROM DISK={Literal(path)} WITH CHECKSUM", c) { CommandTimeout = 180 }; await verify.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+            AtomicFile.Write(path + ".verified", Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("O")));
+        }
+        catch { if (File.Exists(path)) File.Delete(path); throw; }
+        Prune(folder, Prefix(name), 14, protectedBackupPath);
+        if (!string.IsNullOrWhiteSpace(mirror))
+        {
+            try
+            {
+                Directory.CreateDirectory(mirror); string target = Path.GetFullPath(Path.Combine(mirror, Path.GetFileName(path)));
+                if (!string.Equals(target, path, StringComparison.OrdinalIgnoreCase))
+                {
+                    string temporary = target + ".copying";
+                    try { File.Copy(path, temporary, true); File.Move(temporary, target, true); } finally { if (File.Exists(temporary)) File.Delete(temporary); }
+                }
+                Prune(mirror, Prefix(name), 14, protectedBackupPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { AppLog.Failure(ex, "Backup.Mirror"); throw new IOException("Ana yedek alındı; aynalama klasörüne kopyalanamadı. Ana yedek korunuyor."); }
+        }
+        await RecordAuditAsync("Backup.Create", token).ConfigureAwait(false); return path;
+    }
+    internal static void Prune(string folder, string prefix, int keep, string? protectedBackupPath = null)
     {
         if (keep < 1 || !System.Text.RegularExpressions.Regex.IsMatch(prefix, "\\AAccountingApp-[0-9A-F]{16}-\\z")) throw new ArgumentException("Yedek kapsamı geçersiz.");
         string root = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        string? protectedPath = protectedBackupPath == null ? null : Path.GetFullPath(protectedBackupPath);
         foreach (var path in Directory.EnumerateFiles(root, prefix + "*.bak").OrderByDescending(Path.GetFileName, StringComparer.Ordinal).Skip(keep))
         {
             string absolute = Path.GetFullPath(path);
+            if (string.Equals(absolute, protectedPath, StringComparison.OrdinalIgnoreCase)) continue;
             if (string.Equals(Path.GetDirectoryName(absolute), root.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase) && (File.GetAttributes(absolute) & FileAttributes.ReparsePoint) == 0)
             { File.Delete(absolute); if (File.Exists(absolute + ".verified")) File.Delete(absolute + ".verified"); }
         }
     }
     public async Task<bool> EnsureDailyAsync(CancellationToken token = default)
     {
+        await AccountAuthorization.ValidateAsync(connectionString, user, AccountAccess.Admin, token).ConfigureAwait(false);
         user.DemandAdmin(); var preferences = UserPreferences.Load(); string folder = string.IsNullOrWhiteSpace(preferences.BackupFolder) ? DefaultFolder : preferences.BackupFolder;
         string name = await CatalogAsync(token).ConfigureAwait(false); string prefix = Prefix(name);
         if (Directory.Exists(folder) && Directory.EnumerateFiles(folder, prefix + "*.bak").Any(p => File.Exists(p + ".verified") && File.GetLastWriteTimeUtc(p + ".verified") > DateTime.UtcNow.AddHours(-24))) return false;
@@ -75,13 +81,14 @@ internal sealed class BackupService(string connectionString, UserSession user)
     }
     public async Task RestoreAsync(string backupPath, string safetyFolder, CancellationToken token = default)
     {
-        user.DemandAdmin(); string name = await CatalogAsync(token).ConfigureAwait(false); ValidateCatalog(name);
-        if (!File.Exists(backupPath) || !Path.GetFileName(backupPath).StartsWith(Prefix(name), StringComparison.Ordinal) || !backupPath.EndsWith(".bak", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Bu veritabanına ait bir uygulama yedeği seçin.");
-        // A verified safety copy must exist before any connections are interrupted.
-        await BackupAsync(safetyFolder, "", token).ConfigureAwait(false);
+        user.DemandAdmin();
         await Gate.WaitAsync(token).ConfigureAwait(false);
         try
         {
+            await AccountAuthorization.ValidateAsync(connectionString, user, AccountAccess.Admin, token).ConfigureAwait(false);
+            string name = await CatalogAsync(token).ConfigureAwait(false); ValidateCatalog(name);
+            backupPath = Path.GetFullPath(backupPath);
+            if (!File.Exists(backupPath) || !Path.GetFileName(backupPath).StartsWith(Prefix(name), StringComparison.Ordinal) || !backupPath.EndsWith(".bak", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Bu veritabanına ait bir uygulama yedeği seçin.");
             SqlConnection.ClearAllPools(); await using var master = new SqlConnection(Master()); await master.OpenAsync(token).ConfigureAwait(false);
             using var verify = new SqlCommand($"RESTORE VERIFYONLY FROM DISK={Literal(Path.GetFullPath(backupPath))} WITH CHECKSUM", master) { CommandTimeout = 180 }; await verify.ExecuteNonQueryAsync(token).ConfigureAwait(false);
             using var header = new SqlCommand($"RESTORE HEADERONLY FROM DISK={Literal(Path.GetFullPath(backupPath))}", master);
@@ -91,6 +98,11 @@ internal sealed class BackupService(string connectionString, UserSession user)
             using var source = new SqlCommand($"RESTORE FILELISTONLY FROM DISK={Literal(Path.GetFullPath(backupPath))}", master); var sources = await source.TableAsync(token).ConfigureAwait(false);
             if (destinations.Rows.Count != 2 || sources.Rows.Count != 2 || Convert.ToInt32(destinations.Rows[0]["type"]) != 0 || Convert.ToInt32(destinations.Rows[1]["type"]) != 1) throw new InvalidOperationException("Yalnızca tek veri ve tek günlük dosyalı uygulama yedeği desteklenir.");
             var data = sources.AsEnumerable().Single(r => r["Type"].ToString() == "D"); var log = sources.AsEnumerable().Single(r => r["Type"].ToString() == "L");
+            // Validate the selected source before creating/pruning backups. Retain it
+            // even when the safety folder is the source folder and retention is full.
+            await BackupCoreAsync(safetyFolder, "", backupPath, token).ConfigureAwait(false);
+            await AccountAuthorization.ValidateAsync(connectionString, user, AccountAccess.Admin, token).ConfigureAwait(false);
+            SqlConnection.ClearAllPools();
             bool single = false;
             try
             {
@@ -104,15 +116,29 @@ internal sealed class BackupService(string connectionString, UserSession user)
                 if (single) { using var multi = new SqlCommand($"ALTER DATABASE {Identifier(name)} SET MULTI_USER WITH ROLLBACK IMMEDIATE", master); await multi.ExecuteNonQueryAsync(CancellationToken.None).ConfigureAwait(false); }
                 SqlConnection.ClearAllPools();
             }
-            await SchemaUpgrade.PrepareAsync(connectionString, CancellationToken.None).ConfigureAwait(false);
-            await RecordAuditAsync("Backup.Restore", CancellationToken.None).ConfigureAwait(false);
+            await SchemaUpgrade.PrepareAsync(connectionString, CancellationToken.None, safetyFolder, backupPath).ConfigureAwait(false);
+            await RecordAuditAsync("Backup.Restore", CancellationToken.None, revokeSessions: true).ConfigureAwait(false);
         }
         finally { Gate.Release(); }
     }
     private string Master() { var b = Builder; b.InitialCatalog = "master"; b.AttachDBFilename = ""; b.Pooling = false; return b.ConnectionString; }
     private static void ValidateCatalog(string name) { if (string.IsNullOrWhiteSpace(name) || new[] { "master", "model", "msdb", "tempdb" }.Contains(name, StringComparer.OrdinalIgnoreCase)) throw new InvalidOperationException("Uygulama veritabanı seçilmedi."); }
-    private async Task RecordAuditAsync(string action, CancellationToken token)
+    private async Task RecordAuditAsync(string action, CancellationToken token, bool revokeSessions = false)
     {
-        await using var work = await SqlUnitOfWork.OpenAsync(connectionString, token).ConfigureAwait(false); await new PersonnelService(connectionString, user).AuditAsync(work, action, token).ConfigureAwait(false); await work.CommitAsync(token).ConfigureAwait(false);
+        if (revokeSessions)
+        {
+            // Restoring a backup can rewind rowversion counters and account rows.
+            // A new random epoch prevents sessions from before the restore reviving.
+            // Commit revocation before audit: a failed audit must not revive sessions.
+            await using var revocation = await SqlUnitOfWork.OpenAsync(connectionString, token).ConfigureAwait(false);
+            using var revoke = revocation.Command("UPDATE dbo.admin SET SessionEpoch=NEWID()");
+            using var throttle = revocation.Command("IF OBJECT_ID(N'dbo.LoginThrottle') IS NOT NULL DELETE FROM dbo.LoginThrottle");
+            await revoke.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+            await throttle.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+            await revocation.CommitAsync(token).ConfigureAwait(false);
+        }
+        await using var work = await SqlUnitOfWork.OpenAsync(connectionString, token).ConfigureAwait(false);
+        await new PersonnelService(connectionString, user).AuditAsync(work, action, token).ConfigureAwait(false);
+        await work.CommitAsync(token).ConfigureAwait(false);
     }
 }

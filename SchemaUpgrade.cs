@@ -9,14 +9,14 @@ namespace WinFormsApp2;
 
 internal static class SchemaUpgrade
 {
-    public static async Task PrepareAsync(string connectionString, CancellationToken token = default, string? safetyFolder = null)
+    public static async Task PrepareAsync(string connectionString, CancellationToken token = default, string? safetyFolder = null, string? protectedBackupPath = null)
     {
         await LocalDbRuntime.EnsureStartedAsync(connectionString, token).ConfigureAwait(false);
         // DbUp exposes a synchronous upgrade API. Keep this short, bounded schema operation off the UI thread.
-        await Task.Run(() => Upgrade(connectionString, safetyFolder), token).ConfigureAwait(false);
+        await Task.Run(() => Upgrade(connectionString, safetyFolder, protectedBackupPath), token).ConfigureAwait(false);
         await Task.Run(() => new AdminStore(connectionString).MigrateLegacyPasswords(), token).ConfigureAwait(false);
     }
-    internal static void Upgrade(string connectionString, string? safetyFolder = null)
+    internal static void Upgrade(string connectionString, string? safetyFolder = null, string? protectedBackupPath = null)
     {
         using var connection = new SqlConnection(connectionString); connection.Open();
         using var gate = new SqlCommand(@"DECLARE @r int; EXEC @r=sys.sp_getapplock @Resource=N'AccountingApp.Features.v1',
@@ -39,14 +39,14 @@ internal static class SchemaUpgrade
                     if (!scripts.Any(s => s.Name == name)) throw new InvalidOperationException("Uygulanmış şema betiği değişmiş veya uygulama sürümü eski. Yükseltme durduruldu.");
                     executed.Add(name);
                 }
-            if (scripts.Any(s => !executed.Contains(s.Name))) CreateSafetyCopy(connection, safetyFolder);
+            if (scripts.Any(s => !executed.Contains(s.Name))) CreateSafetyCopy(connection, safetyFolder, protectedBackupPath);
             var result = DeployChanges.To.SqlDatabase(connectionString).WithScripts(scripts).JournalToSqlTable("dbo", "__MigrationJournal")
                 .WithTransaction().WithExecutionTimeout(TimeSpan.FromSeconds(90)).LogToNowhere().Build().PerformUpgrade();
             if (!result.Successful) throw new InvalidOperationException("Şema yükseltilemedi; yapılan değişiklikler geri alındı.", result.Error);
         }
         finally { using var release = new SqlCommand("EXEC sys.sp_releaseapplock @Resource=N'AccountingApp.Features.v1',@LockOwner='Session'", connection); release.ExecuteNonQuery(); }
     }
-    private static void CreateSafetyCopy(SqlConnection connection, string? folder)
+    private static void CreateSafetyCopy(SqlConnection connection, string? folder, string? protectedBackupPath)
     {
         using var catalog = new SqlCommand("SELECT DB_NAME()", connection); string name = (string)catalog.ExecuteScalar()!;
         string root = folder ?? Path.Combine(BackupService.DefaultFolder, "schema-upgrades"); Directory.CreateDirectory(root);
@@ -54,6 +54,6 @@ internal static class SchemaUpgrade
         if (path.Length > 259) throw new ArgumentException("Şema yedeği yolu çok uzun; daha kısa bir yedek klasörü seçin.");
         static string Literal(string s) => "N'" + s.Replace("'", "''") + "'";
         using var backup = new SqlCommand($"BACKUP DATABASE [{name.Replace("]", "]]")}] TO DISK={Literal(path)} WITH COPY_ONLY,INIT,CHECKSUM", connection) { CommandTimeout = 180 };
-        backup.ExecuteNonQuery(); using var verify = new SqlCommand($"RESTORE VERIFYONLY FROM DISK={Literal(path)} WITH CHECKSUM", connection) { CommandTimeout = 180 }; verify.ExecuteNonQuery(); BackupService.Prune(root, prefix, 14);
+        backup.ExecuteNonQuery(); using var verify = new SqlCommand($"RESTORE VERIFYONLY FROM DISK={Literal(path)} WITH CHECKSUM", connection) { CommandTimeout = 180 }; verify.ExecuteNonQuery(); BackupService.Prune(root, prefix, 14, protectedBackupPath);
     }
 }

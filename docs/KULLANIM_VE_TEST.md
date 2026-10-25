@@ -12,6 +12,10 @@ Yönetici ekranında kullanıcı adı, maskeli parola ve rol seçilir. Roller: Y
 
 Deneme için iki geçici hesap açın: bir görüntüleyici, bir personel sorumlusu. Her biriyle girişte menüleri ve değiştirme düğmelerini kontrol edin; deneme sonunda yöneticiyle bu hesapları silebilirsiniz. Gerçek kullanıcı parolasını test betiğine yazmayın.
 
+Her rol **Parolamı değiştir** ekranını kullanabilir. Yönetici **Parola sıfırla…** ile başka bir etkin hesaba 30 dakika geçerli geçici parola oluşturabilir; bunun için kendi parolasını tekrar doğrular. Yeni parolalar 15–1024 karakterdir. Geçici parolalı hesap yeni parolasını belirleyene kadar veri ekranlarını açamaz. İşlem adımları ve sınırlar [parola güvenliği kılavuzunda](PAROLA_DEGISTIRME_VE_SIFIRLAMA.md).
+
+Aynı hesapta 15 dakika içinde 5 hatalı parola, yeni girişleri ve mevcut parolayla yeniden doğrulamayı 5 dakika durdurur. Uygulamayı yeniden açmak sayacı temizlemez; açık oturumlar kapanmaz. Başka bir yönetici parolayı sıfırlayarak hedef hesabın kilidini de temizleyebilir. Ayrıntılar [hatalı giriş kılavuzunda](HATALI_GIRIS_SINIRLAMASI.md).
+
 ## Personel, izin ve ödeme
 
 Yeni personel eklemek için alanları doldurup EKLE'ye basın. Otomatik izin eklenmemelidir. Listeden kayıt seçip adı veya tutarı değiştirdikten sonra DÜZENLE'yi kullanın. TC değiştirerek başka kayda yazma engellenir. Silme seçili kaydı ve Genel grubundaki ilişkili izinlerini tek işlemde siler; ödeme defteri kalır.

@@ -57,7 +57,7 @@ internal static class GridPreferences
     public static void Save(DataGridView grid, string? path = null)
     {
         if (grid.Columns.Count == 0 || grid.FindForm() == null) return;
-        AtomicFile.Write(path ?? PathFor(grid), JsonSerializer.SerializeToUtf8Bytes(grid.Columns.Cast<DataGridViewColumn>().Select(c => new GridColumnState(c.Name, c.Width, c.DisplayIndex, c.Visible))));
+        AtomicFile.Write(path ?? PathFor(grid), JsonSerializer.SerializeToUtf8Bytes(grid.Columns.Cast<DataGridViewColumn>().Where(c => !RecordSelection.IsInternalColumn(c)).Select(c => new GridColumnState(c.Name, c.Width, c.DisplayIndex, c.Visible))));
     }
     public static void Restore(DataGridView grid, string? path = null)
     {
@@ -65,9 +65,10 @@ internal static class GridPreferences
         try
         {
             var state = JsonSerializer.Deserialize<List<GridColumnState>>(File.ReadAllText(path ?? PathFor(grid))) ?? [];
-            foreach (var item in state.OrderBy(s => s.Index)) if (grid.Columns[item.Name] is DataGridViewColumn column)
+            foreach (var item in state.OrderBy(s => s.Index)) if (grid.Columns[item.Name] is DataGridViewColumn column && !RecordSelection.IsInternalColumn(column))
             { column.Width = Math.Clamp(item.Width, 40, 1200); column.Visible = item.Visible; column.DisplayIndex = Math.Clamp(item.Index, 0, grid.Columns.Count - 1); }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException) { AppLog.Event("Grid.PreferencesReset"); }
+        finally { RecordSelection.HideInternalColumns(grid); }
     }
 }

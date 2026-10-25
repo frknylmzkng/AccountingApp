@@ -12,6 +12,39 @@ namespace WinFormsApp2
             grid.AllowUserToDeleteRows = false;
             grid.MultiSelect = false;
             grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            grid.DataBindingComplete += (_, _) => HideInternalColumns(grid);
+        }
+
+        internal static bool IsInternalColumnName(string name) => name is PersonnelConcurrency.ColumnName or AccountTarget.VersionColumn or AccountTarget.EpochColumn;
+        internal static bool IsInternalColumn(DataGridViewColumn column) => IsInternalColumnName(column.Name) || IsInternalColumnName(column.DataPropertyName);
+
+        internal static void HideInternalColumns(DataGridView grid)
+        {
+            foreach (var column in grid.Columns.Cast<DataGridViewColumn>().Where(IsInternalColumn)) column.Visible = false;
+        }
+
+        internal static byte[] OriginalVersion(DataGridView grid)
+        {
+            if (grid.SelectedRows.Count != 1 || grid.SelectedRows[0].DataBoundItem is not DataRowView record ||
+                !record.Row.HasVersion(DataRowVersion.Original) || !record.Row.Table.Columns.Contains(PersonnelConcurrency.ColumnName))
+                return PersonnelConcurrency.RequireVersion(null);
+            return PersonnelConcurrency.RequireVersion(record.Row[PersonnelConcurrency.ColumnName, DataRowVersion.Original] as byte[]);
+        }
+
+        internal static bool RestoreDraftSelection(DataGridView grid, string tc, string? draftVersion)
+        {
+            grid.ClearSelection();
+            foreach (DataGridViewRow row in grid.Rows)
+            {
+                if (row.DataBoundItem is not DataRowView bound || !bound.Row.HasVersion(DataRowVersion.Original) ||
+                    !bound.Row.Table.Columns.Contains("TC") || !bound.Row.Table.Columns.Contains(PersonnelConcurrency.ColumnName) ||
+                    Convert.ToString(bound.Row["TC", DataRowVersion.Original], CultureInfo.InvariantCulture) != tc) continue;
+                if (bound.Row[PersonnelConcurrency.ColumnName, DataRowVersion.Original] is not byte[] version ||
+                    !PersonnelConcurrency.MatchesDraft(draftVersion, version)) return false;
+                row.Selected = true;
+                return true;
+            }
+            return false;
         }
 
         public static bool TryGetKey(DataGridView grid, string columnName, out string key)

@@ -1,6 +1,6 @@
 namespace WinFormsApp2
 {
-    public enum AppPage { Login, Dashboard, General, Joker, Search, Summary, Contact, Admin, Payments, Settings, LeavePlan }
+    public enum AppPage { Login, Dashboard, General, Joker, Search, Summary, Contact, Admin, Payments, Settings, LeavePlan, PasswordChange }
 
     internal sealed class PageRequestedEventArgs : EventArgs
     {
@@ -10,9 +10,11 @@ namespace WinFormsApp2
 
     internal sealed class LoginSucceededEventArgs : EventArgs
     {
-        public string Username { get; }
-        public UserRole Role { get; }
-        public LoginSucceededEventArgs(string username, UserRole role = UserRole.Admin) { Username = username; Role = role; }
+        public UserSession Session { get; }
+        public string Username => Session.Username;
+        public UserRole Role => Session.Role;
+        public LoginSucceededEventArgs(string username, UserRole role = UserRole.Admin) : this(new UserSession(username, role)) { }
+        public LoginSucceededEventArgs(UserSession session) { Session = session; }
     }
 
     public class SessionForm : Form
@@ -26,10 +28,14 @@ namespace WinFormsApp2
         private readonly CancellationTokenSource lifetime = new();
         private System.Windows.Forms.Timer? clock;
         private bool busy;
+        internal bool IsOperationRunning => busy;
         private bool resourcesDisposed;
         private bool chromeInitialized;
         internal bool PersistGridLayout = true;
         internal bool PreviewOnly;
+        protected virtual bool ShowNavigationTools => true;
+        protected virtual bool CompactNavigation => false;
+        internal string? LogoutNotice { get; private set; }
         private ToolStripStatusLabel? hint;
         protected Func<Task>? RefreshAction { get; set; }
         protected Action? ClearAction { get; set; }
@@ -50,18 +56,26 @@ namespace WinFormsApp2
                 Controls.Add(content);
                 var tools = new ToolStrip { Dock = DockStyle.Top, GripStyle = ToolStripGripStyle.Hidden, Padding = new Padding(5), AutoSize = true };
                 void Tool(string label, Action action) { var button = new ToolStripButton(label); button.Click += (_, _) => action(); tools.Items.Add(button); }
-                Tool("Ana ekran", RequestBack); Tool("Yenile · F5", () => _ = RefreshScreenAsync());
+                if (ShowNavigationTools && CompactNavigation)
+                {
+                    if (Session?.MustChangePassword != true) Tool("Ana ekran", RequestBack);
+                    Tool("Çıkış", () => RequestLogout());
+                }
+                else if (ShowNavigationTools)
+                {
+                Tool("Ana ekran", RequestBack); Tool("Parolamı değiştir", () => RequestPage(AppPage.PasswordChange)); Tool("Yenile · F5", () => _ = RefreshScreenAsync());
                 Tool("Tema", () => { var p = UserPreferences.Load(); p.DarkTheme = !p.DarkTheme; p.Save(); AppTheme.Apply(this); });
                 Tool("Excel", () => Export(true)); Tool("CSV", () => Export(false)); Tool("Kolonlar", ShowColumns);
                 Tool("Ödemeler", () => RequestPage(AppPage.Payments)); Tool("İzin planı", () => RequestPage(AppPage.LeavePlan));
                 if (Session?.Role == UserRole.Admin) Tool("Ayarlar / yedek", () => RequestPage(AppPage.Settings));
-                Tool("Çıkış", RequestLogout);
-                Controls.Add(tools);
+                Tool("Çıkış", () => RequestLogout());
+                }
+                if (ShowNavigationTools) Controls.Add(tools);
                 var status = new StatusStrip { Dock = DockStyle.Bottom };
                 var who = new ToolStripStatusLabel(Session == null ? "Oturum yok" : $"{User.Username} · {User.RoleLabel}");
                 hint = new ToolStripStatusLabel("F1 yardım · F2 temizle · F5 yenile · Esc geri") { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
                 var time = new ToolStripStatusLabel(DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss")); status.Items.AddRange([who, hint, time]); Controls.Add(status);
-                ClientSize = new Size(original.Width, original.Height + tools.PreferredSize.Height + status.Height);
+                ClientSize = new Size(original.Width, original.Height + (ShowNavigationTools ? tools.PreferredSize.Height : 0) + status.Height);
                 MinimumSize = new Size(Math.Min(Width, 800), Math.Min(Height, 600));
                 clock = new System.Windows.Forms.Timer { Interval = 1000 }; clock.Tick += (_, _) => time.Text = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss"); clock.Start();
                 foreach (var control in EditControls) control.Enabled = Session?.CanEdit == true;
@@ -75,7 +89,8 @@ namespace WinFormsApp2
         {
             if (busy || IsDisposed || lifetime.IsCancellationRequested) return false;
             busy = true; if (hint != null) hint.Text = "İşlem sürüyor…";
-            var controls = AppTheme.Descendants(this).Where(c => c is Button or TextBox or ComboBox or DateTimePicker or DataGridView).ToDictionary(c => c, c => c.Enabled);
+            var controls = AppTheme.Descendants(this).Where(c => c is Button or TextBox or ComboBox or DateTimePicker or DataGridView or ToolStrip).ToDictionary(c => c, c => c.Enabled);
+            bool sessionRevoked = false;
             foreach (var control in controls.Keys) control.Enabled = false;
             try
             {
@@ -84,6 +99,11 @@ namespace WinFormsApp2
                 return true;
             }
             catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { return false; }
+            catch (SessionRevokedException)
+            {
+                sessionRevoked = true;
+                return false;
+            }
             catch (Exception ex)
             {
                 string id = AppLog.Failure(ex, "UI.Operation");
@@ -100,6 +120,7 @@ namespace WinFormsApp2
                 if (!IsDisposed) foreach (var pair in controls) if (!pair.Key.IsDisposed) pair.Key.Enabled = pair.Value;
                 if (!IsDisposed) foreach (var control in EditControls) control.Enabled = Session?.CanEdit == true && control.Enabled;
                 if (!IsDisposed) RefreshEditState();
+                if (sessionRevoked && !IsDisposed) NotifySessionRevoked();
             }
         }
         protected async Task RefreshScreenAsync() { if (RefreshAction != null) await RefreshAction(); }
@@ -117,8 +138,13 @@ namespace WinFormsApp2
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
-        private void Draft(bool save)
+        private async void Draft(bool save)
         {
+            if (!await RunOperationAsync(async token =>
+            {
+                User.DemandEdit();
+                await AccountAuthorization.ValidateAsync(AppDatabase.ConnectionString, User, AccountAccess.Edit, token);
+            }) || IsDisposed) return;
             try
             {
                 User.DemandEdit();
@@ -130,22 +156,20 @@ namespace WinFormsApp2
                 {
                     var values = fields.ToDictionary(c => c.Name, c => c is DateTimePicker date ? date.Value.ToString("O") : c.Text);
                     var selectedGrid = AppTheme.Descendants(this).OfType<DataGridView>().FirstOrDefault();
-                    if (selectedGrid != null && RecordSelection.TryGetTc(selectedGrid, out _)) values["__OriginalAmount"] = RecordSelection.OriginalAmount(selectedGrid).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    if (selectedGrid != null && RecordSelection.TryGetTc(selectedGrid, out _)) values["__OriginalVersion"] = Convert.ToBase64String(RecordSelection.OriginalVersion(selectedGrid));
                     DraftStore.Save(path, scope, values);
                 }
                 else
                 {
                     var values = DraftStore.Load<Dictionary<string, string>>(path, scope) ?? [];
                     ClearAction?.Invoke();
-                    // Selection is deliberately re-established from the current bound record, never from a saved row index.
+                    // Never attach stale draft fields to a freshly loaded version of the record.
                     var grid = AppTheme.Descendants(this).OfType<DataGridView>().FirstOrDefault();
                     string tc = values.GetValueOrDefault("TC_txt", "");
-                    if (grid != null) foreach (DataGridViewRow row in grid.Rows) if (row.Cells["TC"].Value?.ToString() == tc)
+                    if (grid != null && !RecordSelection.RestoreDraftSelection(grid, tc, values.GetValueOrDefault("__OriginalVersion")) &&
+                        (values.ContainsKey("__OriginalVersion") || grid.Rows.Cast<DataGridViewRow>().Any(r => r.DataBoundItem is System.Data.DataRowView bound && bound.Row["TC"].ToString() == tc)))
                     {
-                        row.Selected = true;
-                        if (values.TryGetValue("__OriginalAmount", out string? oldAmount) && decimal.TryParse(oldAmount, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out decimal original) && original != RecordSelection.OriginalAmount(grid))
-                        { values["money_txt"] = MoneyInput.Format(RecordSelection.OriginalAmount(grid)); MessageBox.Show(this, "Personelin kalan tutarı taslaktan sonra değişmiş. Güncel tutar korunarak taslak yükleniyor.", "Taslak güncellendi"); }
-                        break;
+                        MessageBox.Show(this, "Taslağın kayıt sürümü güncel listeyle eşleşmiyor. Taslak alanları yüklenecek; mevcut kayıt seçilmedi ve değiştirilmeyecek. Düzenlemek için güncel kaydı yeniden seçip değişikliklerinizi kontrol edin.", "Taslak kontrolü");
                     }
                     foreach (var field in fields) if (values.TryGetValue(field.Name, out string? value))
                     { if (field is DateTimePicker date && DateTime.TryParse(value, out DateTime parsed)) date.Value = parsed; else field.Text = value; }
@@ -158,24 +182,34 @@ namespace WinFormsApp2
         {
             var grid = AppTheme.Descendants(this).OfType<DataGridView>().FirstOrDefault(); if (grid == null) return;
             var menu = new ContextMenuStrip();
-            foreach (DataGridViewColumn column in grid.Columns)
+            foreach (DataGridViewColumn column in grid.Columns.Cast<DataGridViewColumn>().Where(c => !RecordSelection.IsInternalColumn(c)))
             {
                 var item = new ToolStripMenuItem(column.HeaderText) { Checked = column.Visible, CheckOnClick = true };
                 item.CheckedChanged += (_, _) => { column.Visible = item.Checked; GridPreferences.Save(grid); }; menu.Items.Add(item);
             }
             menu.Closed += (_, _) => menu.Dispose(); menu.Show(Cursor.Position);
         }
-        private void Export(bool excel)
+        private async void Export(bool excel)
         {
             var grid = AppTheme.Descendants(this).OfType<DataGridView>().FirstOrDefault(); if (grid == null || grid.Rows.Count == 0) return;
             using var dialog = new SaveFileDialog { Filter = excel ? "Excel|*.xlsx" : "CSV|*.csv", FileName = GetType().Name + "-" + DateTime.Today.ToString("yyyyMMdd") };
             if (dialog.ShowDialog(this) != DialogResult.OK) return;
+            if (!await RunOperationAsync(token => AccountAuthorization.ValidateAsync(AppDatabase.ConnectionString, User, AccountAccess.Read, token)) || IsDisposed) return;
             try { var table = ReportExport.Snapshot(grid); if (excel) ReportExport.Excel(table, dialog.FileName); else ReportExport.Csv(table, dialog.FileName); ReportExport.Open(dialog.FileName); }
             catch (Exception ex) { AppLog.Failure(ex, "Export"); MessageBox.Show(this, "Dosya yazılamadı veya açılamadı."); }
         }
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             lifetime.Cancel(); base.OnFormClosed(e);
+        }
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            base.OnFormClosing(e);
+            if (busy && e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                SetHint("İşlem sürüyor. Tamamlandıktan sonra pencereyi kapatabilirsiniz.");
+            }
         }
         protected override void Dispose(bool disposing)
         {
@@ -191,9 +225,11 @@ namespace WinFormsApp2
         }
         internal event EventHandler<PageRequestedEventArgs>? PageRequested;
         internal event EventHandler? LogoutRequested;
+        internal event EventHandler? SessionRevoked;
 
-        protected void RequestPage(AppPage page) => PageRequested?.Invoke(this, new PageRequestedEventArgs(page));
+        protected void RequestPage(AppPage page) { if (!busy) PageRequested?.Invoke(this, new PageRequestedEventArgs(page)); }
         protected void RequestBack() => RequestPage(AppPage.Dashboard);
-        protected void RequestLogout() => LogoutRequested?.Invoke(this, EventArgs.Empty);
+        protected void RequestLogout(string? notice = null) { if (!busy) { LogoutNotice = notice; LogoutRequested?.Invoke(this, EventArgs.Empty); } }
+        protected void NotifySessionRevoked() => SessionRevoked?.Invoke(this, EventArgs.Empty);
     }
 }

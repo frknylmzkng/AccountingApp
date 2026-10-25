@@ -9,6 +9,13 @@ namespace WinFormsApp2
         private bool credentialsPrepared;
         private UserSession? authenticatedUser;
         private bool useAccountService;
+        private string sessionNotice = "";
+
+        internal void SetSessionNotice(string notice)
+        {
+            sessionNotice = notice + " ";
+            if (CanContinue) statusLabel.Text = sessionNotice + (credentialsPrepared ? "Giriş hazır." : "Giriş hazırlanıyor…");
+        }
 
         internal LoginFailure? LastFailure { get; private set; }
 
@@ -50,7 +57,7 @@ namespace WinFormsApp2
                 if (!CanContinue) return false;
                 credentialsPrepared = true;
                 LoginDiagnostics.RecordPreparationState("ready");
-                statusLabel.Text = "Giriş hazır. Kullanıcı adınızı ve şifrenizi girin.";
+                statusLabel.Text = sessionNotice + "Giriş hazır. Kullanıcı adınızı ve şifrenizi girin.";
                 return true;
             }
             catch (Exception ex)
@@ -92,9 +99,9 @@ namespace WinFormsApp2
                 if (!CanContinue) return false;
                 password_txt.Clear();
                 if (authenticated)
-                    LoginSucceeded?.Invoke(this, new LoginSucceededEventArgs(username.Trim(), authenticatedUser?.Role ?? UserRole.Admin));
+                    LoginSucceeded?.Invoke(this, new LoginSucceededEventArgs(authenticatedUser ?? new UserSession(username.Trim(), UserRole.Admin)));
                 else
-                    statusLabel.Text = "Kullanıcı adı veya şifre hatalı. Bilgilerinizi kontrol edin.";
+                    statusLabel.Text = LoginAttemptPolicy.FailureMessage;
                 return authenticated;
             }
             catch (Exception ex)

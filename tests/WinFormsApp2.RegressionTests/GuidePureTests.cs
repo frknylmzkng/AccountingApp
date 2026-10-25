@@ -69,6 +69,23 @@ public class GuidePureTests
         Assert.That(File.Exists(Path.Combine(directory, prefix + "0003.bak")), Is.False); Assert.That(File.Exists(Path.Combine(directory, prefix + "0017.bak")), Is.True);
         Assert.Throws<ArgumentException>(() => BackupService.Prune(directory, "*", 14));
     }
+    [Test, Category("Backup")]
+    public void RetentionPreservesSelectedSourceAndVerificationMarker()
+    {
+        string prefix = BackupService.Prefix("GuideTest");
+        for (int i = 0; i < 18; i++) File.WriteAllText(Path.Combine(directory, prefix + i.ToString("D4") + ".bak"), "test");
+        string selected = Path.Combine(directory, prefix + "0000.bak");
+        File.WriteAllText(selected + ".verified", "verified");
+        string selectedSpelling = Path.Combine(directory, ".", Path.GetFileName(selected)).ToUpperInvariant();
+
+        BackupService.Prune(directory, prefix, 14, selectedSpelling);
+
+        Assert.That(File.ReadAllText(selected), Is.EqualTo("test"));
+        Assert.That(File.ReadAllText(selected + ".verified"), Is.EqualTo("verified"));
+        Assert.That(Directory.GetFiles(directory, prefix + "*.bak"), Has.Length.EqualTo(15));
+        Assert.That(File.Exists(Path.Combine(directory, prefix + "0001.bak")), Is.False);
+        Assert.That(File.Exists(Path.Combine(directory, prefix + "0017.bak")), Is.True);
+    }
     [Test, Category("Profiles")]
     public void SqlExpressProfileUsesIntegratedSecurityAndNoAttach()
     {

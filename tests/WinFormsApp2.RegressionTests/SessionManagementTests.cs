@@ -19,6 +19,7 @@ public class SessionManagementTests
         public void GoBack() => RequestBack();
         public void Go(AppPage page) => RequestPage(page);
         public void SignOut() => RequestLogout();
+        public Task<bool> Run(Func<CancellationToken, Task> operation) => RunOperationAsync(operation);
     }
 
     private sealed class FailingScreen : Form
@@ -58,6 +59,118 @@ public class SessionManagementTests
 
     private static TextBox LoginField(Giris login, string name) =>
         (TextBox)typeof(Giris).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(login)!;
+
+    [Test]
+    public async Task RunningOperationBlocksToolbarNavigationLogoutAndWindowClose()
+    {
+        var screens = new Screens(); using var context = new AccountingApplicationContext(screens.Create);
+        context.StartSession("admin"); var screen = (TestScreen)context.MainForm!;
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var running = screen.Run(_ => completion.Task);
+        try
+        {
+            Assert.That(screen.IsOperationRunning, Is.True);
+            Assert.That(screen.Controls.OfType<ToolStrip>().All(t => !t.Enabled), Is.True);
+            screen.Go(AppPage.Payments); screen.SignOut(); screen.Close();
+            Assert.That(context.Navigate(AppPage.General), Is.False); context.Logout();
+            Assert.That(context.IsAuthenticated, Is.True); Assert.That(context.MainForm, Is.SameAs(screen));
+            Assert.That(screen.IsDisposed, Is.False);
+        }
+        finally { completion.SetResult(); await running; }
+        Assert.That(screen.Controls.OfType<ToolStrip>().All(t => t.Enabled), Is.True);
+        Assert.That(context.Navigate(AppPage.Payments), Is.True); context.Logout();
+        Assert.That(context.IsAuthenticated, Is.False);
+    }
+    [Test]
+    public async Task RevokedSessionReturnsToLoginAndDisposesProtectedScreen()
+    {
+        var screens = new Screens(); using var context = new AccountingApplicationContext(screens.Create);
+        context.StartSession("operator", UserRole.PersonnelManager); var previous = context.MainForm!;
+        context.SessionValidator = (_, _) => Task.FromResult(false);
+        await context.CheckSessionAsync();
+        Assert.That(context.IsAuthenticated, Is.False); Assert.That(context.Session, Is.Null);
+        Assert.That(context.CurrentPage, Is.EqualTo(AppPage.Login)); Assert.That(previous.IsDisposed, Is.True);
+        Assert.That(context.MainForm!.Controls.OfType<Label>().Any(l => l.Text.Contains("oturumunuz sona erdi")), Is.True);
+    }
+    [Test]
+    public async Task ServerRevocationDuringOperationLogsOutWithoutAnErrorDialog()
+    {
+        var screens = new Screens(); using var context = new AccountingApplicationContext(screens.Create);
+        context.StartSession("operator", UserRole.PersonnelManager); var screen = (TestScreen)context.MainForm!;
+        bool result = await screen.Run(_ => throw new SessionRevokedException());
+        Assert.That(result, Is.False); Assert.That(context.IsAuthenticated, Is.False); Assert.That(screen.IsDisposed, Is.True);
+        Assert.That(context.CurrentPage, Is.EqualTo(AppPage.Login));
+    }
+    [Test]
+    public async Task TransientSessionCheckFailureDoesNotPretendAccountWasRevoked()
+    {
+        var screens = new Screens(); using var context = new AccountingApplicationContext(screens.Create);
+        context.StartSession("operator"); var previous = context.MainForm;
+        context.SessionValidator = (_, _) => throw new IOException("Temporary network failure");
+        await context.CheckSessionAsync();
+        Assert.That(context.IsAuthenticated, Is.True); Assert.That(context.MainForm, Is.SameAs(previous));
+    }
+    [Test]
+    public async Task LateRevocationResultCannotLogoutNewSession()
+    {
+        var screens = new Screens(); using var context = new AccountingApplicationContext(screens.Create);
+        context.StartSession("old-user");
+        var result = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        context.SessionValidator = (_, _) => result.Task;
+        var check = context.CheckSessionAsync(); context.Logout(); context.StartSession("new-user");
+        result.SetResult(false); await check;
+        Assert.That(context.IsAuthenticated, Is.True); Assert.That(context.Username, Is.EqualTo("new-user"));
+    }
+    [Test]
+    public async Task DetectedRevocationWaitsForRunningOperationThenClosesSession()
+    {
+        var screens = new Screens(); using var context = new AccountingApplicationContext(screens.Create);
+        context.StartSession("operator"); var screen = (TestScreen)context.MainForm!;
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var operation = screen.Run(_ => release.Task);
+        try
+        {
+            context.SessionValidator = (_, _) => Task.FromResult(false); await context.CheckSessionAsync();
+            Assert.That(context.IsAuthenticated, Is.True); Assert.That(context.Navigate(AppPage.General), Is.False);
+        }
+        finally { release.SetResult(); await operation; }
+        await context.CheckSessionAsync();
+        Assert.That(context.IsAuthenticated, Is.False); Assert.That(screen.IsDisposed, Is.True);
+    }
+    [Test]
+    public void StartingAuthenticatedSessionPreservesSecurityVersion()
+    {
+        var screens = new Screens(); using var context = new AccountingApplicationContext(screens.Create);
+        var session = new UserSession("operator", UserRole.PersonnelManager) { SecurityVersion = [0,0,0,0,0,0,0,1] };
+        context.StartSession(session);
+        Assert.That(context.Session, Is.SameAs(session));
+        Assert.That(((SessionForm)context.MainForm!).Session!.SecurityVersion, Is.EqualTo(session.SecurityVersion));
+    }
+    [TestCase(UserRole.Admin)]
+    [TestCase(UserRole.PersonnelManager)]
+    [TestCase(UserRole.Viewer)]
+    public void TemporaryLoginCanOnlyNavigateToPasswordChange(UserRole role)
+    {
+        var screens = new Screens(); using var context = new AccountingApplicationContext(screens.Create);
+        var restricted = new UserSession("temporary", role) { MustChangePassword = true };
+        Assert.That(context.StartSession(restricted), Is.True);
+        Assert.That(context.CurrentPage, Is.EqualTo(AppPage.PasswordChange));
+        foreach (var page in new[] { AppPage.Dashboard, AppPage.General, AppPage.Joker, AppPage.Payments, AppPage.Admin, AppPage.Settings, AppPage.Search })
+            Assert.That(context.Navigate(page), Is.False);
+        Assert.That(context.Navigate(AppPage.PasswordChange), Is.True);
+        context.Logout(); Assert.That(context.Session, Is.Null);
+    }
+    [Test]
+    public void RestrictedAdminDoesNotStartAutomaticBackup()
+    {
+        var screens = new Screens(); using var context = new AccountingApplicationContext(screens.Create);
+        context.SessionValidator = (_, _) => Task.FromResult(true);
+        typeof(AccountingApplicationContext).GetField("backgroundServices", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(context, true);
+        context.StartSession(new UserSession("temporary", UserRole.Admin) { MustChangePassword = true });
+        Assert.That(typeof(AccountingApplicationContext).GetField("backupTimer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(context), Is.Null);
+        Assert.That(typeof(AccountingApplicationContext).GetField("sessionTimer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(context), Is.Not.Null);
+        Assert.That(context.CurrentPage, Is.EqualTo(AppPage.PasswordChange));
+    }
 
     [Test]
     public void StartsWithOnlyUnauthenticatedLogin()

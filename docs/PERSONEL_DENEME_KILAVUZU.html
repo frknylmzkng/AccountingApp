@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Muhasebe — Personel deneme kılavuzu</title>
+<style>
+:root{color-scheme:light;font-family:Segoe UI,Arial,sans-serif;color:#17283d;background:#f0f4f8;font-size:16px;line-height:1.7}body{margin:0}.toolbar{position:sticky;top:0;background:#18304e;color:white;padding:12px 24px;display:flex;gap:20px;align-items:center;justify-content:space-between}.toolbar strong{font-size:15px}.toolbar button{border:0;border-radius:6px;padding:9px 16px;background:#fff;color:#18304e;cursor:pointer;font:inherit}main{max-width:1000px;margin:24px auto 60px;padding:40px 48px;background:#fff;box-shadow:0 2px 16px #182e5010;border-radius:10px}h1{line-height:1.2;color:#173759;font-size:2.1rem;margin-top:0}h2{margin-top:2.2rem;padding-top:1rem;border-top:2px solid #e6edf4;font-size:1.35rem;color:#1b4973}strong{color:#153e62}.toolbar strong{color:white}table{border-collapse:collapse;width:100%;margin:18px 0;font-size:.96rem}th,td{border:1px solid #d8e2ed;text-align:left;padding:10px 14px;vertical-align:top}th{background:#eaf1f8}tr:nth-child(even){background:#f8fafc}li{padding:3px 0}blockquote{margin:18px 0;padding:14px 20px;border-left:5px solid #f0ac36;background:#fff7e6}blockquote p{margin:0}input[type=checkbox]{width:18px;height:18px;accent-color:#1d628d}code{background:#eef3f8;padding:2px 5px;border-radius:4px}a{color:#145f96}p,li{overflow-wrap:anywhere}@media(max-width:700px){main{margin:0;padding:24px 18px;border-radius:0}h1{font-size:1.65rem}.toolbar{padding:10px 16px}th,td{padding:8px}}@media print{.toolbar{display:none}body{background:#fff}main{margin:0;padding:0;max-width:none;box-shadow:none}h2{break-after:avoid}tr,blockquote{break-inside:avoid}h1{font-size:24pt}h2{font-size:15pt}body{font-size:10.5pt;line-height:1.45}a{color:inherit;text-decoration:none}@page{size:A4;margin:18mm}}
+</style></head><body><div class="toolbar"><strong>Muhasebe · Kullanıcı kılavuzu</strong><button onclick="window.print()">Yazdır / PDF olarak kaydet</button></div><main><h1 id="muhasebe-personel-duzenleme-deneme-klavuzu">Muhasebe — Personel düzenleme deneme kılavuzu</h1>
+<p>25 Ekim 2026 · Güncel sürüm: personnel-concurrency</p>
+<p>Bu kılavuzla normal personel düzenlemeyi, başka pencerede yapılan değişikliğin korunmasını ve eski taslak kontrolünü deneyebilirsin. Önce 1–5 numaralı bölümleri uygula; diğer denemeler isteğe bağlıdır. Ana deneme yaklaşık 10–15 dakika sürer.</p>
+<h2 id="baslangc-ve-deneme-kayd">1. Başlangıç ve deneme kaydı</h2>
+<ol>
+<li>Masaüstündeki <strong>Muhasebe - Güncel</strong> kısayolunu aç. Eski sürümün açık kopyalarını kullanma.</li>
+<li><strong>Giriş hazır. Kullanıcı adınızı ve şifrenizi girin.</strong> mesajını bekle. İlk açılışta veritabanı için yedek ve güncelleme hazırlığı yapılabilir.</li>
+<li>Kendi hesabınla giriş yap. Düzenleme için <strong>Yönetici</strong> veya <strong>Personel sorumlusu</strong> yetkisi gerekir.</li>
+<li><strong>GENEL PERSONEL İŞLEMLERİ</strong> ekranına gir.</li>
+<li><strong>TEMİZLE</strong> veya <strong>F2</strong> ile yeni kayıt alanlarını temizle. Aşağıdaki gibi bir deneme kaydı oluştur ve <strong>EKLE</strong> düğmesine bas.</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Alan</th>
+<th>Örnek deneme değeri</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TC</td>
+<td>90000000001 — listede kullanılmıyorsa</td>
+</tr>
+<tr>
+<td>ADI</td>
+<td>DENEME</td>
+</tr>
+<tr>
+<td>SOYADI</td>
+<td>KONTROL</td>
+</tr>
+<tr>
+<td>IBAN</td>
+<td>TR000000000000000000000000</td>
+</tr>
+<tr>
+<td>VERİLECEK PARA</td>
+<td>1000,00</td>
+</tr>
+</tbody>
+</table>
+<p>Bu TC ve IBAN yalnızca yerel deneme örnekleridir; gerçek kişi veya ödeme bilgisi olarak kullanılmamalıdır. TC zaten kayıtlıysa başka bir kullanılmayan 11 haneli deneme değeri seç. Gerçek personel kaydı yerine bu deneme satırını kullan.</p>
+<p><strong>Beklenen sonuç:</strong> Deneme kaydı listede görünür; tutar 1.000,00 TL'dir. Personel eklemek tek başına izin oluşturmaz. TC'yi bir yere not et; iki pencerede de aynı kaydı seçeceksin.</p>
+<h2 id="normal-duzenleme">2. Normal düzenleme</h2>
+<ol>
+<li>Listeden deneme personelinin satırını seç. Alanların bu kayıtla dolduğunu gör.</li>
+<li>Adını <strong>DENEME NORMAL</strong> yap; TC, IBAN ve tutarı değiştirme.</li>
+<li><strong>DÜZENLE</strong> düğmesine bas.</li>
+<li>Listeden aynı personeli tekrar seç.</li>
+</ol>
+<p><strong>Beklenen sonuç:</strong> Ad <strong>DENEME NORMAL</strong> olur; IBAN ve 1.000,00 TL tutar korunur. Başarılı kayıttan sonra form alanlarının temizlenmesi normaldir; devam etmek için satırı yeniden seç.</p>
+<h2 id="iki-pencereyi-hazrlama">3. İki pencereyi hazırlama</h2>
+<ol>
+<li>Açık uygulamaya <strong>A penceresi</strong> diyelim. Bu pencereyi açık bırak.</li>
+<li>Masaüstündeki <strong>Muhasebe - Güncel</strong> kısayoluna yeniden çift tıkla. Görev çubuğu simgesi yalnızca mevcut pencereyi öne getirebilir; ikinci uygulamayı masaüstü kısayolundan aç.</li>
+<li>İkinci uygulamada giriş yap; buna <strong>B penceresi</strong> diyelim. İki ayrı düzenleme yetkili hesabın varsa farklı hesaplar kullanabilirsin. Aynı hesabın iki ayrı penceresi de kontrolü denemek için yeterlidir.</li>
+<li>İki pencerede de <strong>GENEL PERSONEL İŞLEMLERİ</strong> ekranını aç. Aynı veritabanı profilini kullan; ayarlardaki bağlantıyı değiştirme.</li>
+<li>Her iki pencerede <strong>F5</strong>'e bas, ardından aynı deneme personelini seç.</li>
+<li>İki pencerede de adın <strong>DENEME NORMAL</strong>, IBAN'ın başlangıç değeri ve tutarın 1.000,00 TL olduğunu kontrol et.</li>
+</ol>
+<p><strong>Kritik nokta:</strong> Sonraki bölümde A kaydettikten sonra B'de <strong>F5'e basma ve satırı yeniden seçme</strong>. B'nin eski bilgilerle kalması, denemenin asıl koşuludur.</p>
+<h2 id="ana-deneme-ann-ad-degisikligini-b-ezemesin">4. Ana deneme: A'nın ad değişikliğini B ezemesin</h2>
+<table>
+<thead>
+<tr>
+<th>Sıra</th>
+<th>Pencere</th>
+<th>Yapılacak işlem</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>A</td>
+<td>Adı <strong>DENEME A</strong> yap ve <strong>DÜZENLE</strong>'ye bas.</td>
+</tr>
+<tr>
+<td>2</td>
+<td>B</td>
+<td>Listeyi yenilemeden, IBAN'ı <strong>TR111111111111111111111111</strong> yap.</td>
+</tr>
+<tr>
+<td>3</td>
+<td>B</td>
+<td><strong>DÜZENLE</strong>'ye bas.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>B'de beklenen mesaj:</strong></p>
+<blockquote>
+<p>Bu personel kaydı başka bir işlem tarafından değiştirilmiş veya yeniden oluşturulmuş. Girdiğiniz bilgiler korundu. Listeyi yenileyip güncel kaydı yeniden seçin.</p>
+</blockquote>
+<p>Mesajı kapat. B'de yazdığın deneme IBAN'ının formda durduğunu kontrol et. İşlem reddedildiğinde girişlerin otomatik temizlenmemelidir.</p>
+<p>Sonra <strong>A penceresinde</strong> F5'e basıp deneme kaydını yeniden seç:</p>
+<ul>
+<li>Ad <strong>DENEME A</strong> kalmalı.</li>
+<li>IBAN başlangıçtaki sıfırlı örnek değer olarak kalmalı; B'nin değişikliği kaydedilmemeli.</li>
+<li>Tutar 1.000,00 TL kalmalı.</li>
+</ul>
+<p>Bu sonuç, eski ekrandaki kayıtla başka kullanıcının ad değişikliğinin ezilemediğini gösterir.</p>
+<h2 id="caksmadan-sonra-guncel-kaytla-devam-etme">5. Çakışmadan sonra güncel kayıtla devam etme</h2>
+<ol>
+<li>B'deki yazdığın değeri gerekirse not et. <strong>F5</strong>'e bas ve deneme personelini yeniden seç.</li>
+<li>Alanların güncel kayıtla dolduğunu gör: ad <strong>DENEME A</strong> olmalı. Yeniden satır seçmek, alanları güncel değerlerle doldurur.</li>
+<li>IBAN'a <strong>TR111111111111111111111111</strong> değerini yeniden yaz.</li>
+<li><strong>DÜZENLE</strong>'ye bas.</li>
+<li>A'da F5'e basıp aynı kaydı seç.</li>
+</ol>
+<p><strong>Beklenen sonuç:</strong> Bu kez kayıt başarılıdır. Ad <strong>DENEME A</strong> olarak korunur, IBAN yeni örnek değer olur, tutar değişmez. Uygulama çakışmaları kendiliğinden birleştirmez; güncel bilgiler üzerinden bilinçli düzenleme yapmanı ister.</p>
+<h2 id="ters-deneme-ann-iban-degisikligini-b-ezemesin">6. Ters deneme: A'nın IBAN değişikliğini B ezemesin</h2>
+<ol>
+<li>A ve B'de F5'e basıp aynı deneme personelini seç.</li>
+<li>A'da IBAN'ı <strong>TR222222222222222222222222</strong> yap ve DÜZENLE'ye bas.</li>
+<li>B'de yenileme yapmadan soyadını <strong>DENEME B</strong> yap ve DÜZENLE'ye bas.</li>
+<li>B'de çakışma mesajı çıkmalı; yazdığın soyadı formda kalmalı.</li>
+<li>A'da F5 ile kaydı kontrol et.</li>
+</ol>
+<p><strong>Beklenen sonuç:</strong> A'nın yeni IBAN'ı korunur. B'nin soyadı değişikliği kaydedilmez; soyadı hâlâ <strong>KONTROL</strong>, tutar 1.000,00 TL'dir.</p>
+<h2 id="yakn-zamanda-iki-kaydetme">7. Yakın zamanda iki kaydetme</h2>
+<ol>
+<li>İki pencerede de F5'e basıp aynı personeli seç.</li>
+<li>A'da adı <strong>DENEME YARIS A</strong>, B'de <strong>DENEME YARIS B</strong> yap.</li>
+<li>İki pencerede de DÜZENLE'ye peş peşe bas; arada yenileme veya yeniden satır seçme yapma.</li>
+</ol>
+<p><strong>Beklenen sonuç:</strong> Yalnızca bir kayıt başarılı olur; diğer pencere çakışma mesajı verir. Hangisinin kazanacağına bağlı olarak listede iki addan biri görünür. İkisinin de başarılı olması beklenen davranış değildir.</p>
+<h2 id="eski-taslak-baska-kullancnn-degisikligini-ezemesin">8. Eski taslak başka kullanıcının değişikliğini ezemesin</h2>
+<ol>
+<li>A ve B'de F5'e basıp aynı deneme personelini seç.</li>
+<li>B'de adı <strong>DENEME TASLAK</strong> yap, ancak DÜZENLE'ye basma.</li>
+<li>B'de <strong>F6</strong> ile taslağı sakla.</li>
+<li>A'da IBAN'ı <strong>TR333333333333333333333333</strong> yapıp DÜZENLE ile kaydet.</li>
+<li>B'de <strong>F5</strong>'e bas. Bu adım önemlidir: liste A'nın güncel kaydını görmeli.</li>
+<li>B'de <strong>F7</strong> ile eski taslağı yükle.</li>
+</ol>
+<p><strong>Beklenen sonuç:</strong> Taslağın kayıt sürümünün güncel listeyle eşleşmediğini bildiren bir uyarı görünür. Uyarıyı kapattığında taslak alanları yüklenir, fakat mevcut personel satırı düzenleme hedefi olarak seçili değildir.</p>
+<p>Bu durumda DÜZENLE'ye basarsan önce listeden kayıt seçmen istenir; eski taslak doğrudan kaydı değiştiremez. A'da F5 ile kontrol ettiğinde yeni IBAN korunmalıdır. Devam etmek için güncel satırı seçip gerekli değişiklikleri yeniden kontrol et.</p>
+<h2 id="tc-ve-izin-tarihleri-korunsun">9. TC ve izin tarihleri korunsun</h2>
+<p><strong>TC kontrolü:</strong> Seçili deneme kaydında TC alanını farklı bir değere çevirip DÜZENLE'ye bas. Düzenleme sırasında TC'nin değiştirilemeyeceği uyarısı beklenir. Ardından satırı yeniden seç.</p>
+<p><strong>İzin kontrolü — yalnızca Genel personelde:</strong></p>
+<ol>
+<li>Deneme personelini seç; başlangıcı <strong>25.10.2026</strong>, bitişi <strong>27.10.2026</strong> yap.</li>
+<li><strong>İZNİ KAYDET</strong> düğmesine bas.</li>
+<li>Satırı yeniden seç, adını değiştir ve yalnızca DÜZENLE'ye bas.</li>
+<li>Kaydı yeniden seçip izin tarihlerini kontrol et.</li>
+</ol>
+<p><strong>Beklenen sonuç:</strong> İzin tarihleri değişmemelidir. Bu örnek başlangıç ve bitiş dahil 3 gündür. Ad/IBAN düzenleme ile izin kaydetme ayrı işlemlerdir.</p>
+<h2 id="joker-ve-kolon-gorunurlugu">10. Joker ve kolon görünürlüğü</h2>
+<p><strong>Joker:</strong> <strong>JOKER PERSONEL İŞLEMLERİ</strong> ekranında farklı bir deneme TC'siyle (örneğin kullanılmıyorsa <strong>90000000002</strong>) ikinci kayıt oluştur. 2–7 numaralı bölümlerdeki normal düzenleme ve çakışma denemelerini bu kayıt için de uygulayabilirsin. Joker ekranında izin denemesi yapma.</p>
+<p><strong>Kolonlar ve Excel:</strong> Üst araç çubuğundaki <strong>Kolonlar</strong> menüsünde teknik bir <strong>RecordVersion</strong> sütunu görünmemelidir. İstersen Excel çıktısı alıp bu teknik alanın rapora eklenmediğini kontrol edebilirsin. Excel aktarımı yalnızca seçili satırı değil, ekrandaki görünür listeyi aktarır; dosyayı kendi bilgisayarında sakla.</p>
+<h2 id="denemeyi-bitirme">11. Denemeyi bitirme</h2>
+<ol>
+<li>İki pencerede de devam eden kayıt işlemi olmadığından emin ol.</li>
+<li>Yalnızca deneme için oluşturduğun TC'leri listeden seçerek SİL ile kaldırabilirsin. Genel personeli silmek ona ait deneme izinlerini de kaldırır; silme onayını TC'yi kontrol ederek ver.</li>
+<li>Deneme kayıtları etkin listeden kalkar; uygulamanın işlem geçmişi korunur.</li>
+<li>B penceresinden <strong>Çıkış</strong> yapıp pencereyi kapat. A'yı günlük kullanım için açık bırakabilirsin.</li>
+</ol>
+<h2 id="sonuc-kontrol-listesi">Sonuç kontrol listesi</h2>
+<ul class="contains-task-list">
+<li class="task-list-item"><input type="checkbox" /> Normal personel düzenlemesi başarılı.</li>
+<li class="task-list-item"><input type="checkbox" /> A adı değiştirince B'nin eski kaydı reddediliyor.</li>
+<li class="task-list-item"><input type="checkbox" /> A IBAN'ı değiştirince B'nin eski kaydı reddediliyor.</li>
+<li class="task-list-item"><input type="checkbox" /> Reddedilen kayıtta B'nin girdiği alanlar hemen temizlenmiyor.</li>
+<li class="task-list-item"><input type="checkbox" /> F5 ve yeniden seçimden sonra bilinçli yeni düzenleme başarılı.</li>
+<li class="task-list-item"><input type="checkbox" /> İki eski sürümle peş peşe kayıtta yalnızca biri başarılı.</li>
+<li class="task-list-item"><input type="checkbox" /> Eski taslak güncel kayda otomatik bağlanamıyor.</li>
+<li class="task-list-item"><input type="checkbox" /> TC değişikliği engelleniyor; ad/IBAN düzenleme izin tarihlerini değiştirmiyor.</li>
+<li class="task-list-item"><input type="checkbox" /> Aynı koruma Joker personelde de çalışıyor.</li>
+<li class="task-list-item"><input type="checkbox" /> Teknik sürüm alanı kolon menüsünde ve Excel'de görünmüyor.</li>
+</ul>
+<p>Beklenmeyen durumda hangi bölüm ve adımda olduğunu, görünen hata metnini ve hangi pencerenin önce kaydettiğini not et. Şifreni paylaşmana gerek yok. Çakışma beklerken iki pencere de başarılı olursa aynı kaydı ve aynı veritabanını kullandığını, B'de arada F5 veya yeniden seçim yapmadığını kontrol et.</p>
+<h2 id="ksayol-tuslar">Kısayol tuşları</h2>
+<table>
+<thead>
+<tr>
+<th>Tuş</th>
+<th>İşlev</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>F1</td>
+<td>Uygulama yardımı</td>
+</tr>
+<tr>
+<td>F2</td>
+<td>Formu temizle / yeni kayıt</td>
+</tr>
+<tr>
+<td>F5</td>
+<td>Listeyi yenile</td>
+</tr>
+<tr>
+<td>F6</td>
+<td>Genel/Joker form taslağını sakla</td>
+</tr>
+<tr>
+<td>F7</td>
+<td>Form taslağını yükle</td>
+</tr>
+<tr>
+<td>Esc</td>
+<td>Ana ekrana dön</td>
+</tr>
+</tbody>
+</table>
+<p>Bu kılavuz için senin adına personel eklenmedi, düzenlenmedi veya silinmedi. Deneme adımları, sen giriş yaptıktan sonra uygulayacağın işlemlerdir.</p>
+</main><script>
+document.querySelectorAll('input[type=checkbox]').forEach((box,i)=>{try{box.checked=localStorage.getItem('muhasebe-personel-guide-v1-'+i)==='1';box.addEventListener('change',()=>localStorage.setItem('muhasebe-personel-guide-v1-'+i,box.checked?'1':'0'))}catch(e){}});
+</script></body></html>
