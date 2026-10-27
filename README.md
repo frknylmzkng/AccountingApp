@@ -8,6 +8,10 @@ Tam doğrulama (26 Ekim 2026): **392 test başarılı, 0 başarısız, 0 atlanan
 
 Arayüz güncellemesi (26 Ekim 2026): [Windows 2000 görünümü, yenilenen ekranlar ve görseller](docs/WINDOWS_2000_DENEME.md). Giriş, ana ekran, personel, arama, özet, hesap yönetimi, ödeme, ayarlar, izin ve parola pencereleri düzenlendi. Bu değişikliklerin tamamı aşağıdaki **v1.1.0 Windows paketine** dahildir.
 
+Responsive arayüz güncellemesi (27 Ekim 2026): ana ekran ve diğer 11 ekran/akış pencere boyutuna uyarlandı; sütunlar, bölümler, listeler ve işlem düğmeleri kullanılabilir alana göre yerleşir. Girilmiş bilgiler, seçimler ve güvenlik kontrolleri korunur. [Ekranlar, önizlemeler ve deneme adımları](docs/RESPONSIVE_ARAYUZLER.md). Bu güncelleme kaynak kodundadır; aşağıdaki v1.1.0 indirme paketi 26 Ekim arayüzünü içerir. Responsive arayüz için henüz yeni bir GitHub Release paketi yayımlanmadı.
+
+Güncel kaynak doğrulaması (27 Ekim 2026): **609 test başarılı, 0 başarısız, 0 atlanan**; Release derlemesi 0 uyarı / 0 hata. Entegrasyon ve geri yükleme testleri gerçek kullanıcı veritabanından ayrı, testin oluşturduğu geçici LocalDB motorunda tamamlandı; motor temizlendi.
+
 ## Windows paketini indir ve kur
 
 **[Windows x64 paketini indir (v1.1.0)](https://github.com/frknylmzkng/AccountingApp/releases/download/v1.1.0/AccountingApp-v1.1.0-win-x64.zip)** · [Sürüm notları](https://github.com/frknylmzkng/AccountingApp/releases/tag/v1.1.0) · [SHA256 doğrulama dosyası](https://github.com/frknylmzkng/AccountingApp/releases/download/v1.1.0/SHA256SUMS.txt)

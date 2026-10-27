@@ -11,51 +11,40 @@ internal static class ClassicLayouts
         foreach (var c in retained) c.Parent?.Controls.Remove(c);
         var discarded = form.Controls.Cast<Control>().ToArray(); form.Controls.Clear();
         foreach (var c in discarded) c.Dispose();
-        form.Text = "Muhasebe — " + title; form.ClientSize = new Size(1040, 570);
+        form.Text = "Muhasebe — " + title; form.ClientSize = new Size(1040, 650);
         var outer = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), RowCount = 3, ColumnCount = 1 };
-        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 55)); outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 204)); outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        outer.Controls.Add(Banner(title, "Düzenlemek için listeden bir satır seçin. Yeni kayıt için alanları temizleyin."), 0, 0);
-        var card = new GroupBox { Text = "Personel bilgileri", Dock = DockStyle.Fill, Padding = new Padding(12, 18, 12, 8), Margin = new Padding(3, 8, 3, 8) };
-        var entries = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 4 };
-        entries.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96)); entries.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        entries.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96)); entries.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        for (int i = 0; i < 3; i++) entries.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        entries.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        void Field(int index, string caption, int column, int row, int order)
-        {
-            labels[index].Text = caption; labels[index].AutoSize = false; labels[index].Dock = DockStyle.Fill; labels[index].TextAlign = ContentAlignment.MiddleLeft; labels[index].TabIndex = order * 2;
-            fields[index].Dock = DockStyle.Fill; fields[index].Margin = new Padding(3, 6, 8, 3); fields[index].TabIndex = order * 2 + 1;
-            entries.Controls.Add(labels[index], column, row); entries.Controls.Add(fields[index], column + 1, row);
-        }
-        Field(0, "TC kimlik no:", 0, 0, 0); Field(4, "Kalan (TL):", 2, 0, 1);
-        Field(1, "Adı:", 0, 1, 2); Field(2, "Soyadı:", 2, 1, 3);
-        Field(3, "IBAN:", 0, 2, 4); entries.SetColumnSpan(fields[3], 3);
-        var commands = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = new Padding(0, 4, 0, 0) };
-        commands.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        string[] names = ["&Ekle", "&Düzenle", "&Sil", "Alanları &temizle"];
-        for (int i = 0; i < actions.Length; i++)
-        {
-            actions[i].Text = names[i]; actions[i].AutoSize = false; actions[i].Dock = DockStyle.Fill; actions[i].TabStop = true; actions[i].TabIndex = i;
-            commands.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25)); actions[i].Margin = new Padding(3);
-            commands.Controls.Add(actions[i], i, 0);
-        }
-        entries.Controls.Add(commands, 0, 3); entries.SetColumnSpan(commands, 4); card.Controls.Add(entries); outer.Controls.Add(card, 0, 1);
-        var list = new GroupBox { Text = "Personel listesi — satır seçerek düzenleyin", Dock = DockStyle.Fill, Padding = new Padding(8, 20, 8, 8) };
+        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        outer.Controls.Add(Banner(title, "Kayıt seçerek düzenleyin veya yeni kayıt ekleyin."), 0, 0);
+        var editor = new PersonnelEditor(labels, fields, actions) { Name = "jokerPersonnelEditor" };
+        var list = new GroupBox { Name = "jokerRecords", Text = "Personel listesi — satır seçerek düzenleyin", Padding = new Padding(8, 20, 8, 8), TabIndex = 1 };
         records.Dock = DockStyle.Fill; records.RowHeadersWidth = 28; records.Margin = Padding.Empty;
         // Joker has no leave workflow. Bind only its personnel columns while
         // retaining the original DataRow (including its version) for guarded edits.
         records.AutoGenerateColumns = false; records.Columns.Clear();
+        records.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         foreach (var (name, caption, width, type) in new[]
         {
-            ("TC", "TC kimlik no", 110, typeof(long)), ("AD", "Adı", 160, typeof(string)), ("SOYAD", "Soyadı", 160, typeof(string)),
-            ("IBAN", "IBAN", 270, typeof(string)), ("PARA", "Kalan (TL)", 120, typeof(decimal)), ("GRUP", "Grup", 80, typeof(string))
+            ("TC", "TC kimlik no", 110, typeof(long)), ("AD", "Adı", 100, typeof(string)), ("SOYAD", "Soyadı", 110, typeof(string)),
+            ("IBAN", "IBAN", 220, typeof(string)), ("PARA", "Kalan (TL)", 105, typeof(decimal)), ("GRUP", "Grup", 65, typeof(string))
         })
         {
-            var column = new DataGridViewTextBoxColumn { Name = name, DataPropertyName = name, HeaderText = caption, Width = width, ValueType = type };
+            var column = new DataGridViewTextBoxColumn { Name = name, DataPropertyName = name, HeaderText = caption,
+                MinimumWidth = records.LogicalToDeviceUnits(width), FillWeight = width, ValueType = type };
             if (name == "PARA") { column.DefaultCellStyle.Format = "N2"; column.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight; }
             records.Columns.Add(column);
         }
-        list.Controls.Add(records); outer.Controls.Add(list, 0, 2); form.Controls.Add(outer); form.ResumeLayout(true);
+        list.Controls.Add(records);
+        var workspace = new JokerPersonnelWorkspace(editor, list) { Dock = DockStyle.Fill, Margin = Padding.Empty, TabIndex = 0 };
+        var navigation = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty, TabIndex = 1 };
+        var toEditor = new Button { Name = "jokerShowEditor", Text = "Personel &bilgileri", Width = 140, Height = 28, Margin = new Padding(3, 4, 6, 4), TabIndex = 0 };
+        var toList = new Button { Name = "jokerShowList", Text = "Personel &listesi", Width = 140, Height = 28, Margin = new Padding(3, 4, 3, 4), TabIndex = 1 };
+        toEditor.Click += (_, _) => workspace.AutoScrollPosition = Point.Empty;
+        toList.Click += (_, _) => workspace.ScrollControlIntoView(list);
+        navigation.Controls.Add(toEditor); navigation.Controls.Add(toList);
+        outer.Controls.Add(navigation, 0, 1); outer.Controls.Add(workspace, 0, 2);
+        form.Controls.Add(outer); form.ResumeLayout(true);
     }
     internal static Panel Banner(string title, string subtitle)
     {
@@ -73,86 +62,61 @@ public partial class Genel
 {
     private void ArrangePersonnel()
     {
-        var leave = new GroupBox { Text = "Seçili personelin izni", Width = 338, Height = 208, Padding = new Padding(12, 20, 12, 8), Margin = new Padding(3, 10, 3, 3) };
-        var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4 };
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96)); table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); table.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); table.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        label7.Text = "Başlangıç:"; label6.Text = "Bitiş:"; label7.AutoSize = label6.AutoSize = false;
-        label7.Dock = label6.Dock = DockStyle.Fill; label7.TextAlign = label6.TextAlign = ContentAlignment.MiddleLeft;
-        dtpBaslangic.Dock = dtpBitis.Dock = DockStyle.Fill; dtpBaslangic.Margin = dtpBitis.Margin = new Padding(3, 5, 3, 3);
-        izinKaydet_btn.Text = "İzni &kaydet"; izinKaydet_btn.AutoSize = false; izinKaydet_btn.Dock = DockStyle.Fill;
-        izinDurumLabel.Dock = DockStyle.Fill; izinDurumLabel.AutoSize = false;
-        table.Controls.Add(label7, 0, 0); table.Controls.Add(dtpBaslangic, 1, 0); table.Controls.Add(label6, 0, 1); table.Controls.Add(dtpBitis, 1, 1);
-        table.Controls.Add(izinKaydet_btn, 0, 2); table.SetColumnSpan(izinKaydet_btn, 2);
-        table.Controls.Add(izinDurumLabel, 0, 3); table.SetColumnSpan(izinDurumLabel, 2); leave.Controls.Add(table);
+        var leave = new GeneralLeaveEditor(label7, label6, dtpBaslangic, dtpBitis, izinKaydet_btn, izinDurumLabel);
         ArrangeGeneralLayout(leave);
     }
-
-    private void ArrangeGeneralLayout(GroupBox leave)
+    private void ArrangeGeneralLayout(GeneralLeaveEditor leave)
     {
         SuspendLayout();
         var retained = new Control[] { label5, label2, label4, label3, label8, TC_txt, ad_txt, soyad_txt, IBAN_txt, money_txt, ekle_btn, edit_btn, sil_btn, temizle_btn, calisanView };
         foreach (var control in retained) control.Parent?.Controls.Remove(control);
         var discarded = Controls.Cast<Control>().ToArray(); Controls.Clear();
         foreach (var control in discarded) control.Dispose();
-        Text = "Muhasebe — Genel Personel"; ClientSize = new Size(1120, 610);
+        Text = "Muhasebe — Genel Personel"; ClientSize = new Size(1120, 650);
         var outer = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1, RowCount = 3 };
-        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 55)); outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 204)); outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        outer.Controls.Add(ClassicLayouts.Banner("Genel Personel", "Personel bilgileri ve izin işlemleri üstte; kayıt listesi alttadır."), 0, 0);
-        var top = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(0, 8, 0, 8) };
-        top.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 66)); top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
-        var card = new GroupBox { Text = "Personel bilgileri", Dock = DockStyle.Fill, Padding = new Padding(12, 18, 12, 8), Margin = new Padding(3, 3, 8, 3) };
-        var entries = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 4 };
-        entries.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96)); entries.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        entries.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96)); entries.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        for (int i = 0; i < 3; i++) entries.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        entries.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        void Field(Label label, string title, TextBox field, int column, int row, int order)
-        {
-            label.Text = title; label.AutoSize = false; label.Dock = DockStyle.Fill; label.TextAlign = ContentAlignment.MiddleLeft; label.TabIndex = order * 2;
-            field.Dock = DockStyle.Fill; field.Margin = new Padding(3, 6, 8, 3); field.TabIndex = order * 2 + 1;
-            entries.Controls.Add(label, column, row); entries.Controls.Add(field, column + 1, row);
-        }
-        Field(label5, "TC kimlik no:", TC_txt, 0, 0, 0); Field(label8, "Kalan (TL):", money_txt, 2, 0, 1);
-        Field(label2, "Adı:", ad_txt, 0, 1, 2); Field(label4, "Soyadı:", soyad_txt, 2, 1, 3);
-        Field(label3, "IBAN:", IBAN_txt, 0, 2, 4); entries.SetColumnSpan(IBAN_txt, 3);
-        var commands = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = new Padding(0, 4, 0, 0) };
-        commands.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        var buttons = new[] { ekle_btn, edit_btn, sil_btn, temizle_btn }; string[] captions = ["&Ekle", "&Düzenle", "&Sil", "Alanları &temizle"];
-        for (int i = 0; i < buttons.Length; i++)
-        {
-            commands.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-            buttons[i].Text = captions[i]; buttons[i].Dock = DockStyle.Fill; buttons[i].AutoSize = false; buttons[i].Margin = new Padding(3); buttons[i].TabIndex = i;
-            commands.Controls.Add(buttons[i], i, 0);
-        }
-        entries.Controls.Add(commands, 0, 3); entries.SetColumnSpan(commands, 4); card.Controls.Add(entries);
-        leave.Dock = DockStyle.Fill; leave.Margin = new Padding(4, 3, 3, 3);
-        top.Controls.Add(card, 0, 0); top.Controls.Add(leave, 1, 0); outer.Controls.Add(top, 0, 1);
-        var list = new GroupBox { Text = "Personel listesi — düzenleme ve izin için bir satır seçin", Dock = DockStyle.Fill, Padding = new Padding(8, 18, 8, 8) };
+        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        outer.Controls.Add(ClassicLayouts.Banner("Genel Personel", "Bilgileri düzenleyin; izin tarihlerini ayrıca kaydedin."), 0, 0);
+        var personnel = new PersonnelEditor(
+            [label5, label2, label4, label3, label8], [TC_txt, ad_txt, soyad_txt, IBAN_txt, money_txt],
+            [ekle_btn, edit_btn, sil_btn, temizle_btn]) { Name = "generalPersonnelEditor" };
+        leave.Name = "generalLeaveCard"; leave.Dock = DockStyle.None; leave.Anchor = AnchorStyles.Top | AnchorStyles.Left; leave.TabIndex = 1;
+        var list = new GroupBox { Name = "generalRecords", Text = "Personel listesi — düzenleme ve izin için bir satır seçin", Padding = new Padding(8, 20, 8, 8), TabIndex = 2 };
         calisanView.Dock = DockStyle.Fill; calisanView.RowHeadersWidth = 28; calisanView.Margin = Padding.Empty;
+        calisanView.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         calisanView.ColumnAdded += (_, e) =>
         {
             var (caption, width) = e.Column.DataPropertyName switch
             {
-                "TC" => ("TC kimlik no", 96), "AD" => ("Adı", 105), "SOYAD" => ("Soyadı", 110), "IBAN" => ("IBAN", 215),
-                "PARA" => ("Kalan (TL)", 100), "GRUP" => ("Grup", 65), "IZINBASLANGIC" => ("İzin başlangıcı", 110),
-                "IZINBITIS" => ("İzin bitişi", 110), "IzinSuresi" => ("Gün", 70), _ => (e.Column.HeaderText, 100)
+                "TC" => ("TC kimlik no", 110), "AD" => ("Adı", 100), "SOYAD" => ("Soyadı", 110), "IBAN" => ("IBAN", 220),
+                "PARA" => ("Kalan (TL)", 105), "GRUP" => ("Grup", 65), "IZINBASLANGIC" => ("İzin başlangıcı", 110),
+                "IZINBITIS" => ("İzin bitişi", 110), "IzinSuresi" => ("Gün", 55), _ => (e.Column.HeaderText, 100)
             };
-            e.Column.HeaderText = caption; e.Column.Width = width;
+            e.Column.HeaderText = caption;
+            e.Column.MinimumWidth = calisanView.LogicalToDeviceUnits(width);
+            e.Column.FillWeight = width;
             if (e.Column.DataPropertyName == "PARA") e.Column.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
         };
-        // Set defaults when columns are created, before saved user column widths
-        // are restored by the normal binding lifecycle.
-        list.Controls.Add(calisanView); outer.Controls.Add(list, 0, 2); Controls.Add(outer); ResumeLayout(true);
+        // Defaults are applied before the existing saved column order/visibility
+        // is restored. Internal row versions remain in their original bound row.
+        list.Controls.Add(calisanView);
+        var workspace = new GeneralPersonnelWorkspace(personnel, leave, list) { Dock = DockStyle.Fill, TabIndex = 0, Margin = Padding.Empty };
+        var navigation = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty, TabIndex = 1 };
+        var toEditor = new Button { Name = "generalShowEditor", Text = "&Bilgi ve izin", Width = 140, Height = 28, Margin = new Padding(3, 4, 6, 4), TabIndex = 0 };
+        var toList = new Button { Name = "generalShowList", Text = "Personel &listesi", Width = 140, Height = 28, Margin = new Padding(3, 4, 3, 4), TabIndex = 1 };
+        toEditor.Click += (_, _) => workspace.AutoScrollPosition = Point.Empty;
+        toList.Click += (_, _) => workspace.ScrollControlIntoView(list);
+        navigation.Controls.Add(toEditor); navigation.Controls.Add(toList);
+        outer.Controls.Add(navigation, 0, 1); outer.Controls.Add(workspace, 0, 2);
+        Controls.Add(outer); ResumeLayout(true);
     }
 }
-
 public partial class Joker
 {
     private void ArrangePersonnel()
     {
-        var clear = new Button(); clear.Click += (_, _) => Temizle();
+        var clear = new Button { Name = "jokerClear" }; clear.Click += (_, _) => Temizle();
         ClassicLayouts.Personnel(this, "Joker Personel", jokerView, [label5, label2, label4, label3, label6], [TC_txt, ad_txt, soyad_txt, IBAN_txt, money_txt], [ekle_btn, edit_btn, sil_btn, clear]);
     }
 }
@@ -197,64 +161,40 @@ public partial class Giris
 public partial class Dashboard
 {
     private readonly TreeView shortcuts = new() { Dock = DockStyle.Fill, ShowLines = true, ShowRootLines = true, FullRowSelect = true, HideSelection = false };
+    private Label? accountShortcutDescription;
     private void ArrangeDashboard()
     {
         SuspendLayout();
         foreach (var control in new Control[] { button1, button2, button3, button4, button5, button6, logout_btn, userLabel }) control.Parent?.Controls.Remove(control);
         Controls.Clear(); panel1.Dispose(); panel2.Dispose(); panel3.Dispose();
-        Text = "Muhasebe — Ana Ekran"; ClientSize = new Size(940, 510); MinimumSize = new Size(800, 560);
+        Text = "Muhasebe — Ana Ekran"; ClientSize = new Size(1040, 640);
         var outer = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1, RowCount = 3 };
-        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 60)); outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 64)); outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         outer.Controls.Add(ClassicLayouts.Banner("Muhasebe Yönetimi", "Personel • İzin • Ödeme"), 0, 0);
-        var body = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 10, 0, 8) };
-        body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210)); body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        var navigation = new GroupBox { Text = "Bölümler", Dock = DockStyle.Fill, Padding = new Padding(8, 18, 8, 8) };
-        navigation.Controls.Add(shortcuts); body.Controls.Add(navigation, 0, 0);
-        var tasks = new FlowLayoutPanel { Name = "dashboardTasks", Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Margin = new Padding(12, 3, 3, 3) };
         button1.Text = "Genel &personel"; button2.Text = "&Joker personel"; button3.Text = "&Kişi ara";
         button5.Text = "Genel &durum"; button4.Text = "&Yönetici hesapları"; button6.Text = "İle&tişim";
         var payments = new Button { Text = "&Ödemeler" }; payments.Click += (_, _) => RequestPage(AppPage.Payments);
         var leave = new Button { Text = "&İzin planı" }; leave.Click += (_, _) => RequestPage(AppPage.LeavePlan);
-        void AddGroup(string title, Button[] buttons)
+        var navigation = new GroupBox { Name = "dashboardNavigation", Text = "Bölümler", Padding = new Padding(8, 20, 8, 8), TabIndex = 0 };
+        navigation.Controls.Add(shortcuts);
+        var cards = new[]
         {
-            var group = new GroupBox { Text = title, Width = 670, Height = buttons.Length > 2 ? 124 : 76, Padding = new Padding(12, 18, 12, 10), Margin = new Padding(0, 0, 0, 10) };
-            int rows = (buttons.Length + 1) / 2;
-            var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = rows };
-            for (int i = 0; i < 2; i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-            for (int i = 0; i < rows; i++) grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f / rows));
-            for (int i = 0; i < buttons.Length; i++)
-            {
-                var button = buttons[i]; button.Dock = DockStyle.None; button.AutoSize = false; button.Size = new Size(200, 32); button.Anchor = AnchorStyles.Left | AnchorStyles.Right; button.Margin = new Padding(4);
-                button.TextAlign = ContentAlignment.MiddleLeft; button.Padding = new Padding(12, 0, 4, 0); button.TabStop = true; button.TabIndex = i;
-                grid.Controls.Add(button, i % 2, i / 2);
-            }
-            group.Controls.Add(grid);
-            group.Layout += (_, _) =>
-            {
-                int buttonHeight = (int)Math.Round(32 * DeviceDpi / 96f);
-                int height = group.Height - group.DisplayRectangle.Height + rows * (buttonHeight + buttons.Max(b => b.Margin.Vertical));
-                if (group.Height != height) group.Height = height;
-                foreach (var button in buttons) if (button.Height != buttonHeight) button.Height = buttonHeight;
-            };
-            tasks.Controls.Add(group);
-        }
-        AddGroup("Personel ve izin", [button1, button2, button3, leave]);
-        AddGroup("Ödeme ve rapor", [payments, button5]);
-        AddGroup("Hesap ve destek", [button4, button6]);
-        tasks.Layout += (_, _) =>
-        {
-            int maximum = (int)Math.Round(700 * DeviceDpi / 96f);
-            int width = Math.Min(maximum, Math.Max(1, tasks.ClientSize.Width));
-            foreach (var group in tasks.Controls.OfType<GroupBox>()) if (group.Width != width) group.Width = width;
+            new DashboardActionCard("Personel", button1, "Genel personel bilgileri ve izinler."),
+            new DashboardActionCard("Personel", button2, "Joker personel listesi ve kayıt bilgileri."),
+            new DashboardActionCard("Arama", button3, "TC, ad veya soyada göre personel bulun."),
+            new DashboardActionCard("İzin", leave, "Seçili personellerin izin dönemleri."),
+            new DashboardActionCard("Ödeme", payments, "Ödeme hareketleri, fiş ve günlük kapanış."),
+            new DashboardActionCard("Rapor", button5, "Personel sayıları ve güncel bakiye özeti."),
+            new DashboardActionCard("Hesap", button4, "Yönetici hesapları ve erişim işlemleri."),
+            new DashboardActionCard("Destek", button6, "İletişim ve destek bilgileri.")
         };
-        body.Controls.Add(tasks, 1, 0); outer.Controls.Add(body, 0, 1);
+        accountShortcutDescription = cards[6].Description;
+        outer.Controls.Add(new DashboardWorkspace(navigation, cards) { Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 8) }, 0, 1);
         var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
-        userLabel.Dock = DockStyle.Fill; userLabel.TextAlign = ContentAlignment.MiddleLeft;
+        userLabel.Dock = DockStyle.Fill; userLabel.TextAlign = ContentAlignment.MiddleLeft; userLabel.AutoEllipsis = true;
         logout_btn.Text = "Oturumu &kapat"; logout_btn.Dock = DockStyle.None; logout_btn.Size = new Size(134, 28); logout_btn.Margin = new Padding(3, 0, 3, 0); logout_btn.Anchor = AnchorStyles.Right; logout_btn.TabStop = true;
         footer.Controls.Add(userLabel, 0, 0); footer.Controls.Add(logout_btn, 1, 0); outer.Controls.Add(footer, 0, 2); Controls.Add(outer);
-        // Finish the native tree selection notification before disposing the
-        // current screen during navigation.
         shortcuts.AfterSelect += (_, e) => { if (e.Node?.Tag is AppPage page) BeginInvoke(() => { if (!IsDisposed) RequestPage(page); }); };
         ResumeLayout(true);
     }

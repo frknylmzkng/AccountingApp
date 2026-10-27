@@ -12,8 +12,13 @@ namespace WinFormsApp2
 {
     public partial class Contact : SessionForm
     {
-        public Contact()
+        private readonly Action<string> copyPhone;
+
+        public Contact() : this(Clipboard.SetText) { }
+
+        internal Contact(Action<string> copyPhone)
         {
+            this.copyPhone = copyPhone ?? throw new ArgumentNullException(nameof(copyPhone));
             InitializeComponent();
             ArrangeContact();
         }

@@ -11,45 +11,45 @@ public partial class Summary
         foreach (var control in retained) control.Parent?.Controls.Remove(control);
         var discarded = Controls.Cast<Control>().ToArray(); Controls.Clear();
         foreach (var control in discarded) control.Dispose();
-        Text = "Muhasebe — Genel Durum"; ClientSize = new Size(1120, 610);
-        var outer = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1, RowCount = 4 };
-        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 55)); outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
-        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 82)); outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        outer.Controls.Add(ClassicLayouts.Banner("Genel Durum", "Personel sayıları, kalan ödeme tutarları ve yakın dönem izinleri"), 0, 0);
-        GroupBox Metric(string title, Label value)
+        Text = "Muhasebe — Genel Durum"; ClientSize = new Size(1120, 650);
+        var outer = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1, RowCount = 3 };
+        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        outer.Controls.Add(ClassicLayouts.Banner("Genel Durum", "Personel, kalan ödeme tutarları ve yakın dönem izinleri"), 0, 0);
+        var counts = new[]
         {
-            var group = new GroupBox { Text = title, Dock = DockStyle.Fill, Padding = new Padding(12, 18, 12, 8), Margin = new Padding(3, 7, 3, 3) };
-            value.AutoSize = false; value.Dock = DockStyle.Fill; value.TextAlign = ContentAlignment.MiddleCenter; value.Font = AppTheme.TitleFont; value.Text = "—"; value.AutoEllipsis = true;
-            group.Controls.Add(value); return group;
-        }
-        var counts = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = Padding.Empty };
-        counts.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        foreach (var (title, value) in new[] { ("Genel personel", personelLbl), ("Joker personel", jokerLabel), ("Bugün izinli", bugunLbl), ("Toplam personel", toplamLbl) })
-        {
-            counts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25)); counts.Controls.Add(Metric(title, value));
-        }
-        outer.Controls.Add(counts, 0, 1);
-        var amounts = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
-        amounts.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); amounts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); amounts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            new SummaryMetricCard("Genel personel", personelLbl), new SummaryMetricCard("Joker personel", jokerLabel),
+            new SummaryMetricCard("Bugün izinli", bugunLbl), new SummaryMetricCard("Toplam personel", toplamLbl)
+        };
         balances.Name = "TotalBalance";
-        amounts.Controls.Add(Metric("Kalan ödeme toplamı", balances), 0, 0); amounts.Controls.Add(Metric("Personel başına ortalama", averageBalance), 1, 0); outer.Controls.Add(amounts, 0, 2);
-        var leaves = new GroupBox { Text = "İzin takibi", Dock = DockStyle.Fill, Padding = new Padding(8, 18, 8, 8), Margin = new Padding(3, 8, 3, 3) };
-        var list = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
-        list.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); list.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        list.Controls.Add(new Label { Text = "Son 30 gün / bugün / gelecek 30 gün. Süresi biten izinler koyu kırmızı, diğer kayıtlar sarıdır.", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
-        alerts.Dock = DockStyle.Fill; alerts.RowHeadersWidth = 28;
+        var amounts = new[] { new SummaryMetricCard("Kalan ödeme toplamı", balances), new SummaryMetricCard("Personel başına ortalama", averageBalance) };
+        var leaves = new SummaryLeavePanel(alerts) { TabIndex = 0 };
+        alerts.Dock = DockStyle.None; alerts.RowHeadersWidth = 28;
+        alerts.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         alerts.ColumnAdded += (_, e) =>
         {
             var (caption, width) = e.Column.DataPropertyName switch
             {
-                "TC" => ("TC kimlik no", 96), "AD" => ("Adı", 105), "SOYAD" => ("Soyadı", 110), "IBAN" => ("IBAN", 215),
-                "PARA" => ("Kalan (TL)", 100), "GRUP" => ("Grup", 65), "IZINBASLANGIC" => ("İzin başlangıcı", 110),
-                "IZINBITIS" => ("İzin bitişi", 110), "IzinSuresi" => ("Gün", 70), "DURUM" => ("Durum", 100), _ => (e.Column.HeaderText, 100)
+                "TC" => ("TC kimlik no", 110), "AD" => ("Adı", 100), "SOYAD" => ("Soyadı", 110), "IBAN" => ("IBAN", 220),
+                "PARA" => ("Kalan (TL)", 105), "GRUP" => ("Grup", 65), "IZINBASLANGIC" => ("İzin başlangıcı", 110),
+                "IZINBITIS" => ("İzin bitişi", 110), "IzinSuresi" => ("Gün", 55), "DURUM" => ("Durum", 100), _ => (e.Column.HeaderText, 100)
             };
-            e.Column.HeaderText = caption; e.Column.Width = width;
+            e.Column.HeaderText = caption;
+            e.Column.MinimumWidth = alerts.LogicalToDeviceUnits(width);
+            e.Column.FillWeight = width;
             if (e.Column.DataPropertyName == "PARA") e.Column.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
         };
-        list.Controls.Add(alerts, 0, 1); leaves.Controls.Add(list); outer.Controls.Add(leaves, 0, 3);
+        var workspace = new SummaryWorkspace(counts, amounts, leaves) { Dock = DockStyle.Fill, Margin = Padding.Empty, TabIndex = 0 };
+        var navigation = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty, TabIndex = 1 };
+        var toPeople = new Button { Name = "summaryShowPeople", Text = "&Personel özeti", Width = 140, Height = 28, Margin = new Padding(3, 4, 6, 4), TabIndex = 0 };
+        var toBalances = new Button { Name = "summaryShowBalances", Text = "&Bakiye özeti", Width = 140, Height = 28, Margin = new Padding(3, 4, 6, 4), TabIndex = 1 };
+        var toLeaves = new Button { Name = "summaryShowLeaves", Text = "İzin &takibi", Width = 140, Height = 28, Margin = new Padding(3, 4, 3, 4), TabIndex = 2 };
+        toPeople.Click += (_, _) => workspace.AutoScrollPosition = Point.Empty;
+        toBalances.Click += (_, _) => workspace.ScrollControlIntoView(amounts[^1]);
+        toLeaves.Click += (_, _) => workspace.ScrollControlIntoView(leaves);
+        navigation.Controls.Add(toPeople); navigation.Controls.Add(toBalances); navigation.Controls.Add(toLeaves);
+        outer.Controls.Add(navigation, 0, 1); outer.Controls.Add(workspace, 0, 2);
         Controls.Add(outer); ResumeLayout(true);
     }
 }

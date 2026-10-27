@@ -253,6 +253,29 @@ public class GuideUiTests
             form.Size = size; form.PerformLayout();
             foreach (var control in AppTheme.Descendants(form).Where(c => c is Button or TextBox or DateTimePicker or ComboBox))
             {
+                // Responsive sections intentionally scroll at the new small sizes.
+                // Check that each control can be brought fully into the viewport
+                // rather than requiring all sections to be onscreen together.
+                if (form is PaymentsForm)
+                {
+                    var workspace = AppTheme.Descendants(form).OfType<PaymentsWorkspace>().Single();
+                    workspace.ScrollControlIntoView(control); Application.DoEvents();
+                }
+                if (form is SettingsForm)
+                {
+                    var workspace = AppTheme.Descendants(form).OfType<SettingsWorkspace>().Single();
+                    workspace.ScrollControlIntoView(control); Application.DoEvents();
+                }
+                if (form is LeavePlanForm)
+                {
+                    var workspace = AppTheme.Descendants(form).OfType<LeavePlanWorkspace>().Single();
+                    workspace.ScrollControlIntoView(control); Application.DoEvents();
+                }
+                if (form is PasswordChangeForm)
+                {
+                    var workspace = AppTheme.Descendants(form).OfType<PasswordChangeWorkspace>().Single();
+                    workspace.ScrollControlIntoView(control); Application.DoEvents();
+                }
                 var bounds = control.RectangleToScreen(control.ClientRectangle);
                 for (var parent = control.Parent; parent != null; parent = parent.Parent)
                     Assert.That(parent.RectangleToScreen(parent.ClientRectangle).Contains(bounds), Is.True, control.Name + " is clipped by " + parent.GetType().Name);

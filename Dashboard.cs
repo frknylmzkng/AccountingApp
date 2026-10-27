@@ -14,8 +14,12 @@ namespace WinFormsApp2
         protected override void OnLoad(EventArgs e)
         {
             button4.Text = Session?.Role == UserRole.Admin ? "&Yönetici hesapları" : "Parolamı &değiştir";
+            if (accountShortcutDescription != null)
+                accountShortcutDescription.Text = Session?.Role == UserRole.Admin ? "Yönetici hesapları ve erişim işlemleri." : "Oturum parolanızı güvenle değiştirin.";
+            button4.AccessibleDescription = accountShortcutDescription?.Text;
             PopulateShortcuts();
             base.OnLoad(e);
+            MinimumSize = LogicalToDeviceUnits(new Size(560, 480));
         }
 
         private void button4_Click(object sender, EventArgs e) => RequestPage(Session?.Role == UserRole.Admin ? AppPage.Admin : AppPage.PasswordChange);
