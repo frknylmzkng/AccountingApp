@@ -2,7 +2,7 @@ namespace WinFormsApp2;
 
 internal sealed partial class SettingsForm
 {
-    private void ArrangeSettings(Button save, Button create, Button restore)
+    private void ArrangeSettings(Button save, Button create, Button restore, Button retry)
     {
         Text = "Muhasebe — Ayarlar"; ClientSize = new Size(980, 650);
         var outer = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1, RowCount = 6 };
@@ -49,7 +49,7 @@ internal sealed partial class SettingsForm
         var backups = Section("Yedekleme ve geri yükleme", 2, 3);
         Field(backups, "Ana yedek klasörü:", backup, "backupFolder", 0, false);
         Field(backups, "Aynalama klasörü:", mirror, "mirrorFolder", 1, false);
-        Note(backups, "Ana klasör boşsa kullanıcı uygulama klasörü kullanılır. Aynalama isteğe bağlıdır (USB / OneDrive). Otomatik yedekleme: 24 saatte bir, son 14 yedek. Yedekler personel verilerini içerir; klasör erişimini buna göre seçin.", 2);
+        Note(backups, "Yönetici oturumu açıkken saatlik kontrol: ana yedek 24 saatte bir, eksik aynalama sonraki kontrolde yeniden denenir. Son 14 yedek tutulur. Ana klasör boşsa kullanıcı uygulama klasörü kullanılır; yedekler personel verilerini içerir.", 2);
         var appearance = Section("Görünüm ve fiş", 3, 2);
         Field(appearance, "Fiş logosu (PNG):", logo, "receiptLogo", 0, true);
         logo.PlaceholderText = "İsteğe bağlı PNG dosyası";
@@ -58,9 +58,9 @@ internal sealed partial class SettingsForm
         themes.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 290)); themes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); themes.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         classic.Dock = dark.Dock = DockStyle.Fill; classic.TabIndex = 0; dark.TabIndex = 1;
         themes.Controls.Add(classic, 0, 0); themes.Controls.Add(dark, 1, 0); appearance.Controls.Add(themes, 0, 1); appearance.SetColumnSpan(themes, 3);
-        var actions = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = new Padding(3, 4, 3, 4) };
-        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 154)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 154)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 192)); actions.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        Button[] buttons = [save, create, restore];
+        var actions = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 1, Margin = new Padding(3, 4, 3, 4) };
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 142)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 142)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 192)); actions.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        Button[] buttons = [save, create, retry, restore];
         for (int i = 0; i < buttons.Length; i++) { buttons[i].Dock = DockStyle.Fill; buttons[i].Margin = new Padding(3); buttons[i].TabIndex = i; actions.Controls.Add(buttons[i], i + 1, 0); }
         outer.Controls.Add(actions, 0, 4);
         result.AutoSize = false; result.MaximumSize = Size.Empty; result.Dock = DockStyle.Fill; result.TextAlign = ContentAlignment.TopLeft; result.Padding = new Padding(3, 8, 3, 3);

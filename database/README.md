@@ -1,4 +1,4 @@
-﻿# Bağlantı ayarı ve veritabanı kurulumu
+# Bağlantı ayarı ve veritabanı kurulumu
 
 Uygulama ve kurulum aracı aynı `appsettings.json` biçimini kullanır. Varsayılan dosya EXE yanındadır; kısayolun çalışma klasörü ayarı değiştirmez. Yönetici, Ayarlar ekranında başka bir JSON profilini doğrulayıp seçebilir; profil değişince oturum kapanır ve yeniden giriş gerekir. Transaction ortasında bağlantı değiştirilmez. Ayar okunamazsa veya LocalDB MDF'si bulunamazsa başka bir DB'ye sessizce geçilmez.
 
@@ -84,6 +84,8 @@ Proje kökünden:
 İki EXE aynı .NET/SQL bileşenlerini paylaşacak şekilde aynı klasöre yayımlanır. Paket klasörünü bütün olarak kullanın. Sürüm güncellerken mevcut appsettings.json ayarını yeni dağıtıma taşıyın; yeni kurulum örneğiyle değiştirmek veritabanı seçimini değiştirir.
 
 ## Otomatik özellik yükseltmeleri ve bakım
+
+`upgrades/105-leave-rowversion.sql`, izin kayıtlarına ayrı bir `LeaveVersion` rowversion sütunu ekler. Genel Personel ve toplu İzin Planlama, personel sürümü ile izin sürümünü birlikte doğrular; izin bulunmayan seçimde de beklenen yokluk kontrol edilir. Eski tarihler korunur; mevcut doğrulanmış yedek ve transaction akışı kullanılır. Ayrıntılar: [izin sürüm koruması](../docs/IZIN_SURUM_KORUMASI.md).
 
 Gömülü upgrades betikleri DbUp ve dbo.__MigrationJournal ile izlenir. Journal betik adı SHA256 özeti içerir. Uygulanmış dosyayı değiştirmeyin; yeni numaralı dosya ekleyin. Betikler tek transaction içinde uygulanır ve önce doğrulanmış güvenlik yedeği alınır. Temel kurulum journal'ı dbo.SchemaMigrations bundan ayrıdır.
 

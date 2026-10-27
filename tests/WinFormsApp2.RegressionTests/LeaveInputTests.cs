@@ -30,7 +30,7 @@ public class LeaveInputTests
     {
         var store = new PersonnelStore("deliberately invalid connection string");
         var invalid = new LeavePeriod(new DateTime(2026, 10, 25), new DateTime(2026, 10, 24));
-        Assert.Throws<ArgumentException>(() => store.SaveLeave(11111111111L, invalid));
+        Assert.Throws<ArgumentException>(() => store.SaveLeave(new LeaveTarget(11111111111L, new byte[8], null), invalid));
     }
 
     [Test]

@@ -127,27 +127,8 @@ namespace WinFormsApp2
             return username.Trim();
         }
 
-        public void Delete(string username)
-        {
-            DatabaseTransaction.Run(connectionString, (connection, transaction) =>
-            {
-                // Lock the count through deletion so concurrent windows cannot remove the last admins.
-                using var count = new SqlCommand("SELECT COUNT(*) FROM admin WITH (UPDLOCK, HOLDLOCK)",
-                    connection, transaction);
-                if (Convert.ToInt32(count.ExecuteScalar()) <= 1)
-                    throw new InvalidOperationException("En az bir admin hesabı kalmalıdır! Silme işlemi iptal edildi.");
-
-                using var check = new SqlCommand("SELECT COUNT(*) FROM admin WHERE username = @username",
-                    connection, transaction);
-                check.Parameters.AddWithValue("@username", username);
-                if (Convert.ToInt32(check.ExecuteScalar()) != 1)
-                    throw new InvalidOperationException("Seçilen yönetici bulunamadı veya tekil değil. Listeyi yeniden açın.");
-
-                using var delete = new SqlCommand("DELETE FROM admin WHERE username = @username",
-                    connection, transaction);
-                delete.Parameters.AddWithValue("@username", username);
-                delete.ExecuteNonQuery();
-            });
-        }
+        // Legacy synchronous callers use the same authorization and selected-account guards.
+        public void Delete(UserSession user, AccountTarget? selected) =>
+            new AccountService(connectionString).DeleteAsync(user, selected, default).GetAwaiter().GetResult();
     }
 }

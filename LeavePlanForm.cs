@@ -21,10 +21,13 @@ internal sealed partial class LeavePlanForm : SessionForm
     });
     private async void Save(object? sender, EventArgs e)
     {
-        var selected = grid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.DataBoundItem).OfType<DataRowView>().Where(v => v.Row.HasVersion(DataRowVersion.Original)).Select(v => Convert.ToInt64(v.Row["TC", DataRowVersion.Original])).Distinct().ToArray();
+        LeaveTarget[] selected;
+        try { selected = LeaveTarget.FromSelection(grid); }
+        catch (InvalidOperationException ex) { MessageBox.Show(this, ex.Message); return; }
         if (selected.Length == 0) return;
-        if (MessageBox.Show(this, $"{selected.Length} personelin izin dönemi {start.Value:dd.MM.yyyy}–{end.Value:dd.MM.yyyy} olarak kaydedilsin mi? Bir kayıt hata verirse planın tamamı geri alınır.", "Plan onayı", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
-        var plan = selected.Select(tc => (tc, new LeavePeriod(start.Value.Date, end.Value.Date))).ToArray();
+        var leave = new LeavePeriod(start.Value.Date, end.Value.Date);
+        if (MessageBox.Show(this, $"{selected.Length} personelin izin dönemi {leave.Start:dd.MM.yyyy}–{leave.End:dd.MM.yyyy} olarak kaydedilsin mi? Bir kayıt hata verirse planın tamamı geri alınır.", "Plan onayı", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
+        var plan = selected.Select(target => (target, leave)).ToArray();
         if (await RunOperationAsync(token => People.SaveLeavesAsync(plan, token), "İzin planı kaydedildi.") && !IsDisposed) await ReloadAsync();
     }
 }

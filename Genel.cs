@@ -84,7 +84,10 @@ namespace WinFormsApp2
                 return;
             }
 
-            await ApplyChangeAsync(token => People.SaveLeavesAsync([(tc, leave)], token),
+            LeaveTarget target;
+            try { target = LeaveTarget.FromSelection(calisanView).Single(); }
+            catch (InvalidOperationException ex) { MessageBox.Show(this, ex.Message); return; }
+            await ApplyChangeAsync(token => People.SaveLeavesAsync([(target, leave)], token),
                 "Seçilen personelin izin tarihleri kaydedildi. Personel bilgileri değiştirilmedi.");
         }
 
@@ -97,11 +100,14 @@ namespace WinFormsApp2
                 MessageBox.Show("Lütfen silmek için listeden bir kayıt seçin!");
                 return;
             }
+            byte[] version;
+            try { version = RecordSelection.OriginalVersion(calisanView); }
+            catch (InvalidOperationException ex) { MessageBox.Show(this, ex.Message); return; }
             if (MessageBox.Show($"{tc} numaralı çalışanı ve ilişkili izinleri silmek istediğinize emin misiniz?",
                 "Silme Onayı", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                 return;
 
-            await ApplyChangeAsync(token => People.DeleteAsync(PersonnelGroup.General, tc, token),
+            await ApplyChangeAsync(token => People.DeleteAsync(PersonnelGroup.General, tc, version, token),
                 "Çalışan ve izin bilgileri silindi!");
         }
 

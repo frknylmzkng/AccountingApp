@@ -53,15 +53,15 @@ public class DatabaseSetupTests
         var person = new PersonnelDetails(11111111111L, "Ada", "Test", "TR000000000000000000000000", 1500.50m);
         store.Add(PersonnelGroup.General, person);
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.izinler"), Is.Zero);
-        store.SaveLeave(person.Tc, new LeavePeriod(new DateTime(2026, 1, 10), new DateTime(2026, 1, 12)));
-        Assert.That(Scalar("SELECT IzinSuresi FROM dbo.izinler"), Is.EqualTo(3));
         // Installation baseline remains immutable; the application's additive upgrade supplies versions.
         string upgradeFolder = Path.Combine(Path.GetTempPath(), "AccountingAppTests", "upgrade-" + Guid.NewGuid().ToString("N"));
         try { SchemaUpgrade.Upgrade(settings.CreateConnectionString(), upgradeFolder); }
         finally { if (Directory.Exists(upgradeFolder)) Directory.Delete(upgradeFolder, true); }
+        store.SaveLeave(new LeaveTarget(person.Tc, (byte[])Scalar("SELECT RecordVersion FROM dbo.Calisan")!, null), new LeavePeriod(new DateTime(2026, 1, 10), new DateTime(2026, 1, 12)));
+        Assert.That(Scalar("SELECT IzinSuresi FROM dbo.izinler"), Is.EqualTo(3));
         store.Update(PersonnelGroup.General, person with { Amount = 2000m }, (byte[])Scalar("SELECT RecordVersion FROM dbo.Calisan")!);
         Assert.That(Scalar("SELECT IzinSuresi FROM dbo.izinler"), Is.EqualTo(3));
-        store.Delete(PersonnelGroup.General, person.Tc);
+        store.Delete(PersonnelGroup.General, person.Tc, (byte[])Scalar("SELECT RecordVersion FROM dbo.Calisan")!);
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.izinler"), Is.Zero);
         Assert.Throws<SqlException>(() => Execute("UPDATE dbo.admin SET password=N'plaintext'"));
     }

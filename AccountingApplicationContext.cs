@@ -217,11 +217,21 @@ namespace WinFormsApp2
             if (backupRunning || Session?.Role != UserRole.Admin || sessionLifetime == null) return;
             backupRunning = true;
             var user = Session; var token = sessionLifetime.Token;
-            try { await new BackupService(AppDatabase.ConnectionString, user).EnsureDailyAsync(token); }
+            try
+            {
+                await new BackupService(AppDatabase.ConnectionString, user).EnsureDailyAsync(token);
+                if (!token.IsCancellationRequested && ReferenceEquals(Session, user) && MainForm is SessionForm current)
+                    current.SetHint("Yerel yedek ve seçili aynalama kontrolü tamamlandı.");
+            }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { }
             catch (SessionRevokedException)
             {
                 if (ReferenceEquals(Session, user)) { sessionRevoked = true; Logout(SessionRevokedException.Notice); }
+            }
+            catch (BackupMirrorException)
+            {
+                if (!token.IsCancellationRequested && ReferenceEquals(Session, user) && MainForm is SessionForm form)
+                    form.SetHint("Ana yedek mevcut; harici kopya bekliyor. Erişim sağlandığında yeniden denenecek; Ayarlar'dan da deneyebilirsiniz.");
             }
             catch (Exception ex)
             {

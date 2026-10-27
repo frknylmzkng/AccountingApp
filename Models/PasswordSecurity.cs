@@ -20,13 +20,20 @@ internal sealed record AccountTarget(string Username, byte[] Version, Guid Epoch
 {
     internal const string VersionColumn = "AccountVersion";
     internal const string EpochColumn = "AccountEpoch";
+    internal const string SelectionMessage = "Hesap listesini yenileyip işlem yapılacak hesabı yeniden seçin.";
+    internal const string ConflictMessage = "Hesap seçiminizden sonra değiştirilmiş veya yeniden oluşturulmuş. Listeyi yenileyip hesabı yeniden seçin.";
+    internal static AccountTarget RequireSnapshot(AccountTarget? target) => target != null &&
+        !string.IsNullOrWhiteSpace(target.Username) && target.Username.Length <= 50 &&
+        target.Version is { Length: 8 } && target.Epoch != Guid.Empty
+            ? new(target.Username, target.Version.ToArray(), target.Epoch)
+            : throw new ArgumentException(SelectionMessage);
     internal static AccountTarget FromGrid(DataGridView grid)
     {
         if (!RecordSelection.TryGetKey(grid, "username", out string name) || grid.SelectedRows[0].DataBoundItem is not DataRowView row ||
             !row.Row.Table.Columns.Contains(VersionColumn) || !row.Row.Table.Columns.Contains(EpochColumn) ||
             row.Row[VersionColumn, DataRowVersion.Original] is not byte[] { Length: 8 } version ||
             row.Row[EpochColumn, DataRowVersion.Original] is not Guid epoch || epoch == Guid.Empty)
-            throw new InvalidOperationException("Hesap listesini yenileyip sıfırlanacak hesabı yeniden seçin.");
+            throw new InvalidOperationException(SelectionMessage);
         return new(name, version.ToArray(), epoch);
     }
 }

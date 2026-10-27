@@ -72,11 +72,14 @@ namespace WinFormsApp2
                 MessageBox.Show("Lütfen silmek için listeden bir kayıt seçin!");
                 return;
             }
+            byte[] version;
+            try { version = RecordSelection.OriginalVersion(jokerView); }
+            catch (InvalidOperationException ex) { MessageBox.Show(this, ex.Message); return; }
             if (MessageBox.Show($"{tc} numaralı Joker kaydını silmek istediğinize emin misiniz?",
                 "Silme Onayı", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                 return;
 
-            await ApplyChangeAsync(token => People.DeleteAsync(PersonnelGroup.Joker, tc, token),
+            await ApplyChangeAsync(token => People.DeleteAsync(PersonnelGroup.Joker, tc, version, token),
                 "Kayıt başarıyla silindi!");
         }
 

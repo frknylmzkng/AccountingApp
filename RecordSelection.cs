@@ -15,7 +15,7 @@ namespace WinFormsApp2
             grid.DataBindingComplete += (_, _) => HideInternalColumns(grid);
         }
 
-        internal static bool IsInternalColumnName(string name) => name is PersonnelConcurrency.ColumnName or AccountTarget.VersionColumn or AccountTarget.EpochColumn;
+        internal static bool IsInternalColumnName(string name) => name is PersonnelConcurrency.ColumnName or LeaveTarget.ColumnName or AccountTarget.VersionColumn or AccountTarget.EpochColumn;
         internal static bool IsInternalColumn(DataGridViewColumn column) => IsInternalColumnName(column.Name) || IsInternalColumnName(column.DataPropertyName);
 
         internal static void HideInternalColumns(DataGridView grid)

@@ -52,41 +52,25 @@ namespace WinFormsApp2
             });
         }
 
-        public void SaveLeave(long tc, LeavePeriod leave)
+        public void SaveLeave(LeaveTarget selected, LeavePeriod leave)
         {
             ArgumentNullException.ThrowIfNull(leave);
             ValidateLeave(PersonnelGroup.General, leave);
-            DatabaseTransaction.Run(connectionString, (connection, transaction) =>
-            {
-                EnsureSingleRecord(connection, transaction, "Calisan", tc);
-                using var count = new SqlCommand(@"
-                    SELECT COUNT(*) FROM izinler WITH (UPDLOCK, HOLDLOCK) WHERE TC = @TC",
-                    connection, transaction);
-                count.Parameters.Add("@TC", SqlDbType.BigInt).Value = tc;
-                int leaveCount = Convert.ToInt32(count.ExecuteScalar());
-                if (leaveCount > 1)
-                    throw new InvalidOperationException(
-                        "Bu personelin birden fazla izin kaydı var. İzinler topluca değiştirilemez.");
-
-                if (leaveCount == 0)
-                    InsertLeave(connection, transaction, tc, leave);
-                else
-                {
-                    using var update = new SqlCommand(@"
-                        UPDATE izinler SET IZINBASLANGIC = @BASLANGIC, IZINBITIS = @BITIS
-                        WHERE TC = @TC", connection, transaction);
-                    AddLeaveParameters(update, tc, leave);
-                    update.ExecuteNonQuery();
-                }
-            });
+            SaveLeaveCoreAsync(LeaveTarget.RequireSnapshot(selected), leave).GetAwaiter().GetResult();
         }
-
-        public void Delete(PersonnelGroup group, long tc)
+        private async Task SaveLeaveCoreAsync(LeaveTarget selected, LeavePeriod leave)
         {
+            await using var work = await SqlUnitOfWork.OpenAsync(connectionString, CancellationToken.None).ConfigureAwait(false);
+            await new PersonnelRepository(work).SaveLeaveAsync(selected, leave, CancellationToken.None).ConfigureAwait(false);
+            await work.CommitAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        public void Delete(PersonnelGroup group, long tc, byte[]? expectedVersion)
+        {
+            byte[] version = PersonnelConcurrency.RequireVersion(expectedVersion);
             string table = GetTable(group);
             DatabaseTransaction.Run(connectionString, (connection, transaction) =>
             {
-                EnsureSingleRecord(connection, transaction, table, tc);
+                EnsureSingleRecord(connection, transaction, table, tc, version);
                 if (group == PersonnelGroup.General)
                 {
                     using var deleteLeave = new SqlCommand("DELETE FROM izinler WHERE TC = @TC",
@@ -96,10 +80,11 @@ namespace WinFormsApp2
                 }
 
                 // The table comes only from the requested enum, never from a displayed value.
-                using var delete = new SqlCommand($"DELETE FROM {table} WHERE TC = @TC",
+                using var delete = new SqlCommand($"DELETE FROM {table} WHERE TC = @TC AND RecordVersion = @version",
                     connection, transaction);
                 delete.Parameters.Add("@TC", SqlDbType.BigInt).Value = tc;
-                delete.ExecuteNonQuery();
+                delete.Parameters.Add("@version", SqlDbType.Binary, 8).Value = version;
+                if (delete.ExecuteNonQuery() != 1) throw new InvalidOperationException(PersonnelConcurrency.ConflictMessage);
             });
         }
 
@@ -120,15 +105,16 @@ namespace WinFormsApp2
         }
 
         private static void EnsureSingleRecord(SqlConnection connection, SqlTransaction transaction,
-            string table, long tc)
+            string table, long tc, byte[]? expectedVersion = null)
         {
             using var check = new SqlCommand(
-                $"SELECT COUNT(*) FROM {table} WITH (UPDLOCK, HOLDLOCK) WHERE TC = @TC",
+                $"SELECT COUNT(*) FROM {table} WITH (UPDLOCK, HOLDLOCK) WHERE TC = @TC" + (expectedVersion == null ? "" : " AND RecordVersion = @version"),
                 connection, transaction);
             check.Parameters.Add("@TC", SqlDbType.BigInt).Value = tc;
+            if (expectedVersion != null) check.Parameters.Add("@version", SqlDbType.Binary, 8).Value = expectedVersion;
             if (Convert.ToInt32(check.ExecuteScalar()) != 1)
                 throw new InvalidOperationException(
-                    "Seçilen kayıt bu grupta bulunamadı veya tekil değil. Listeyi yeniden açıp kaydı seçin.");
+                    expectedVersion == null ? "Seçilen kayıt bu grupta bulunamadı veya tekil değil. Listeyi yeniden açıp kaydı seçin." : PersonnelConcurrency.ConflictMessage);
         }
 
         private static void AddPersonParameters(SqlCommand command, PersonnelDetails person)

@@ -14,11 +14,15 @@ internal sealed partial class SettingsForm : SessionForm
         var save = new Button { Text = "Ayarları kaydet" };
         var create = new Button { Text = "Şimdi yedekle" };
         var restore = new Button { Text = "Yedekten geri yükle…" };
-        ArrangeSettings(save, create, restore);
+        var retry = new Button { Text = "Aynalamayı yeniden dene" };
+        ArrangeSettings(save, create, restore, retry);
         var prefs = UserPreferences.Load(); config.Text = prefs.DatabaseConfigurationPath; backup.Text = prefs.BackupFolder; mirror.Text = prefs.MirrorFolder; logo.Text = prefs.LogoPath; dark.Checked = prefs.DarkTheme;
         classic.Checked = prefs.ClassicTheme; dark.Enabled = !classic.Checked;
         classic.CheckedChanged += (_, _) => dark.Enabled = !classic.Checked;
         save.Click += Save; create.Click += Backup; restore.Click += Restore;
+        retry.Click += RetryMirror;
+        RefreshAction = RefreshBackupStatusAsync;
+        Load += async (_, _) => { if (!PreviewOnly) await RefreshBackupStatusAsync(); };
     }
     private async void Save(object? sender, EventArgs e)
     {
@@ -35,14 +39,26 @@ internal sealed partial class SettingsForm : SessionForm
             }
             prefs.DatabaseConfigurationPath = selected; prefs.BackupFolder = backup.Text.Trim(); prefs.MirrorFolder = mirror.Text.Trim(); prefs.LogoPath = logo.Text.Trim(); prefs.DarkTheme = dark.Checked; prefs.ClassicTheme = classic.Checked; prefs.Save();
         }, changed ? "Profil doğrulandı; yeniden giriş gerekiyor." : "Ayarlar kaydedildi.");
-        if (done && !IsDisposed) { if (changed) RequestLogout(); else AppTheme.Apply(this); }
+        if (done && !IsDisposed) { if (changed) RequestLogout(); else { AppTheme.Apply(this); await RefreshBackupStatusAsync(); } }
     }
-    private async void Backup(object? sender, EventArgs e) => await RunOperationAsync(async token =>
+    private string BackupFolder => string.IsNullOrWhiteSpace(backup.Text) ? BackupService.DefaultFolder : backup.Text.Trim();
+    private async Task RefreshBackupStatusAsync() => await RunOperationAsync(async token =>
     {
-        string folder = string.IsNullOrWhiteSpace(backup.Text) ? BackupService.DefaultFolder : backup.Text.Trim();
-        string path = await new BackupService(AppDatabase.ConnectionString, User).BackupAsync(folder, mirror.Text.Trim(), token);
-        if (!IsDisposed) result.Text = "Doğrulanmış yedek: " + path;
-    }, "Yedek alındı ve doğrulandı.");
+        string text = await new BackupService(AppDatabase.ConnectionString, User).StatusAsync(BackupFolder, mirror.Text.Trim(), token);
+        if (!IsDisposed) result.Text = text;
+    });
+    private async void Backup(object? sender, EventArgs e)
+    {
+        string folder = BackupFolder, destination = mirror.Text.Trim();
+        await RunOperationAsync(token => new BackupService(AppDatabase.ConnectionString, User).BackupAsync(folder, destination, token), "Yerel yedek ve seçili aynalama tamamlandı.");
+        if (!IsDisposed && !Lifetime.IsCancellationRequested) await RefreshBackupStatusAsync();
+    }
+    private async void RetryMirror(object? sender, EventArgs e)
+    {
+        string folder = BackupFolder, destination = mirror.Text.Trim();
+        await RunOperationAsync(token => new BackupService(AppDatabase.ConnectionString, User).RetryMirrorAsync(folder, destination, token), "Aynalama tamamlandı; yeni yerel yedek oluşturulmadı.");
+        if (!IsDisposed && !Lifetime.IsCancellationRequested) await RefreshBackupStatusAsync();
+    }
     private async void Restore(object? sender, EventArgs e)
     {
         using var file = new OpenFileDialog { Filter = "Uygulama yedeği|AccountingApp-*.bak", CheckFileExists = true }; if (file.ShowDialog(this) != DialogResult.OK) return;

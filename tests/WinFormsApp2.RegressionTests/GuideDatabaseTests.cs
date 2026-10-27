@@ -54,6 +54,8 @@ public partial class GuideDatabaseTests
     }
     private async Task<byte[]> VersionAsync(PersonnelGroup group = PersonnelGroup.General, long tc = 11111111111L) =>
         ((byte[])(await Service.ListAsync(group, tc: tc.ToString(System.Globalization.CultureInfo.InvariantCulture))).Rows[0][PersonnelConcurrency.ColumnName]).ToArray();
+    private async Task<LeaveTarget> LeaveSelectionAsync(long tc = 11111111111L) =>
+        LeaveTarget.FromRow((await Service.ListAsync(PersonnelGroup.General, tc: tc.ToString(System.Globalization.CultureInfo.InvariantCulture))).Rows[0]);
     private async Task<AccountTarget> TargetAsync(string username)
     {
         var row = (await new AccountService(connection).ListAsync(admin, default)).AsEnumerable().Single(r => r.Field<string>("username") == username);
@@ -73,7 +75,7 @@ public partial class GuideDatabaseTests
     public async Task StartupUpgradeIsRepeatableAndPreservesExistingRows()
     {
         await Service.SaveAsync(PersonnelGroup.General, Person(), true); await SchemaUpgrade.PrepareAsync(connection); await SchemaUpgrade.PrepareAsync(connection);
-        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(5)); Assert.That(Scalar("SELECT COUNT(*) FROM dbo.Calisan"), Is.EqualTo(1));
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(6)); Assert.That(Scalar("SELECT COUNT(*) FROM dbo.Calisan"), Is.EqualTo(1));
     }
     [Test, Category("Migrations")]
     public async Task UnversionedLegacyDatabaseUpgradesWithoutFalseBaselineOrDataLoss()
@@ -126,7 +128,7 @@ public partial class GuideDatabaseTests
     public async Task LastAdminCannotBeDeletedEvenWhenViewerExists()
     {
         var accounts = new AccountService(connection); await accounts.AddAsync(admin, "viewer", "Test-only-password-123", UserRole.Viewer, default);
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await accounts.DeleteAsync(admin, "test-admin", default));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await accounts.DeleteAsync(admin, await TargetAsync("test-admin"), default));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.admin WHERE RoleName=N'Admin'"), Is.EqualTo(1));
     }
     [Test, Category("Roles")]
@@ -135,14 +137,14 @@ public partial class GuideDatabaseTests
         var actor = CreateActor("operator", UserRole.PersonnelManager);
         var accounts = new AccountService(connection);
         await Service.SaveAsync(PersonnelGroup.General, Person(), true); byte[] personVersion = await VersionAsync();
-        await accounts.SetActiveAsync(admin, actor.Username, false, default);
+        await accounts.SetActiveAsync(admin, await TargetAsync(actor.Username), false, default);
         var stale = new PersonnelService(connection, actor);
         int audit = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"));
         int ledger = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.PaymentLedger"));
         await Assert.ThrowsAsync<SessionRevokedException>(async () => await stale.SaveAsync(PersonnelGroup.General, Person() with { FirstName = "Blocked" }, false, expectedVersion: personVersion));
         await Assert.ThrowsAsync<SessionRevokedException>(async () => await stale.SaveAsync(PersonnelGroup.Joker, Person(tc: 22222222222L), true));
-        await Assert.ThrowsAsync<SessionRevokedException>(async () => await stale.DeleteAsync(PersonnelGroup.General, Person().Tc));
-        await Assert.ThrowsAsync<SessionRevokedException>(async () => await stale.SaveLeavesAsync([(Person().Tc, new(new(2026, 1, 1), new(2026, 1, 3)))]));
+        await Assert.ThrowsAsync<SessionRevokedException>(async () => await stale.DeleteAsync(PersonnelGroup.General, Person().Tc, new byte[8]));
+        await Assert.ThrowsAsync<SessionRevokedException>(async () => await stale.SaveLeavesAsync([(await LeaveSelectionAsync(), new(new(2026, 1, 1), new(2026, 1, 3)))]));
         await Assert.ThrowsAsync<SessionRevokedException>(async () => await stale.PayAsync(PersonnelGroup.General, Person().Tc, 30m, Guid.NewGuid()));
         await Assert.ThrowsAsync<SessionRevokedException>(async () => await stale.ListAsync(null));
         await Assert.ThrowsAsync<SessionRevokedException>(async () => await stale.LedgerAsync());
@@ -156,8 +158,8 @@ public partial class GuideDatabaseTests
     public async Task ReactivationRequiresNewLoginAndDoesNotReviveOldSession()
     {
         var actor = CreateActor("operator", UserRole.PersonnelManager); var accounts = new AccountService(connection);
-        await accounts.SetActiveAsync(admin, actor.Username, false, default);
-        await accounts.SetActiveAsync(admin, actor.Username, true, default);
+        await accounts.SetActiveAsync(admin, await TargetAsync(actor.Username), false, default);
+        await accounts.SetActiveAsync(admin, await TargetAsync(actor.Username), true, default);
         Assert.That(await AccountAuthorization.IsCurrentAsync(connection, actor, default), Is.False);
         var fresh = await accounts.AuthenticateAsync(actor.Username, "Test-only-password-123");
         Assert.That(fresh, Is.Not.Null); Assert.That(fresh!.SecurityVersion, Is.Not.EqualTo(actor.SecurityVersion));
@@ -168,7 +170,7 @@ public partial class GuideDatabaseTests
     public async Task DeletedAndRecreatedUsernameCannotReuseOldSession()
     {
         var actor = CreateActor("operator", UserRole.PersonnelManager); var accounts = new AccountService(connection);
-        await accounts.DeleteAsync(admin, actor.Username, default);
+        await accounts.DeleteAsync(admin, await TargetAsync(actor.Username), default);
         var replacement = CreateActor(actor.Username, UserRole.PersonnelManager);
         Assert.That(await AccountAuthorization.IsCurrentAsync(connection, actor, default), Is.False);
         Assert.That(await AccountAuthorization.IsCurrentAsync(connection, replacement, default), Is.True);
@@ -197,10 +199,10 @@ public partial class GuideDatabaseTests
         var actor = CreateActor("second-admin", UserRole.Admin); var accounts = new AccountService(connection);
         await Service.SaveAsync(PersonnelGroup.General, Person(), true);
         Guid payment = await Service.PayAsync(PersonnelGroup.General, Person().Tc, 30m, Guid.NewGuid());
-        await accounts.SetActiveAsync(admin, actor.Username, false, default);
+        await accounts.SetActiveAsync(admin, await TargetAsync(actor.Username), false, default);
         await Assert.ThrowsAsync<SessionRevokedException>(async () => await accounts.AddAsync(actor, "blocked", "Test-only-password-123", UserRole.Admin, default));
-        await Assert.ThrowsAsync<SessionRevokedException>(async () => await accounts.DeleteAsync(actor, admin.Username, default));
-        await Assert.ThrowsAsync<SessionRevokedException>(async () => await accounts.SetActiveAsync(actor, admin.Username, false, default));
+        await Assert.ThrowsAsync<SessionRevokedException>(async () => await accounts.DeleteAsync(actor, await TargetAsync(admin.Username), default));
+        await Assert.ThrowsAsync<SessionRevokedException>(async () => await accounts.SetActiveAsync(actor, await TargetAsync(admin.Username), false, default));
         await Assert.ThrowsAsync<SessionRevokedException>(async () => await accounts.ListAsync(actor, default));
         await Assert.ThrowsAsync<SessionRevokedException>(async () => await new PersonnelService(connection, actor).ReversePaymentAsync(payment));
         string folder = Path.Combine(directory, "blocked-backup");
@@ -211,8 +213,8 @@ public partial class GuideDatabaseTests
     public async Task OwnAccountCannotBeDeactivatedAndNoopActivationKeepsSessionValid()
     {
         var accounts = new AccountService(connection);
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await accounts.SetActiveAsync(admin, admin.Username, false, default));
-        await accounts.SetActiveAsync(admin, admin.Username, true, default);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await accounts.SetActiveAsync(admin, await TargetAsync(admin.Username), false, default));
+        await accounts.SetActiveAsync(admin, await TargetAsync(admin.Username), true, default);
         Assert.That(await AccountAuthorization.IsCurrentAsync(connection, admin, default), Is.True);
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.admin WHERE IsActive=1 AND RoleName=N'Admin'"), Is.EqualTo(1));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"), Is.Zero);
@@ -315,7 +317,7 @@ public partial class GuideDatabaseTests
         await Assert.ThrowsAsync<UnauthorizedAccessException>(async () => await accounts.ResetPasswordAsync(admin, await TargetAsync(actor.Username), "wrong-password"));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(async () => await accounts.ResetPasswordAsync(actor, await TargetAsync(admin.Username), "Test-only-password-123"));
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await accounts.ResetPasswordAsync(admin, await TargetAsync(admin.Username), "Test-only-password-123"));
-        await accounts.SetActiveAsync(admin, actor.Username, false, default);
+        await accounts.SetActiveAsync(admin, await TargetAsync(actor.Username), false, default);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await accounts.ResetPasswordAsync(admin, await TargetAsync(actor.Username), "Test-only-password-123"));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action=N'Account.PasswordReset'"), Is.Zero);
         Assert.That(Scalar("SELECT MustChangePassword FROM dbo.admin WHERE username=N'reset-user'"), Is.EqualTo(false));
@@ -325,9 +327,9 @@ public partial class GuideDatabaseTests
     {
         var actor = CreateActor("reset-user", UserRole.PersonnelManager); var accounts = new AccountService(connection);
         var oldTarget = await TargetAsync(actor.Username);
-        await accounts.DeleteAsync(admin, actor.Username, default); CreateActor(actor.Username, UserRole.PersonnelManager);
+        await accounts.DeleteAsync(admin, await TargetAsync(actor.Username), default); CreateActor(actor.Username, UserRole.PersonnelManager);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await accounts.ResetPasswordAsync(admin, oldTarget, "Test-only-password-123"));
-        var otherAdmin = CreateActor("second-admin", UserRole.Admin); await accounts.SetActiveAsync(admin, otherAdmin.Username, false, default);
+        var otherAdmin = CreateActor("second-admin", UserRole.Admin); await accounts.SetActiveAsync(admin, await TargetAsync(otherAdmin.Username), false, default);
         await Assert.ThrowsAsync<SessionRevokedException>(async () => await accounts.ResetPasswordAsync(otherAdmin, await TargetAsync(actor.Username), "Test-only-password-123"));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action=N'Account.PasswordReset'"), Is.Zero);
     }
@@ -378,12 +380,13 @@ public partial class GuideDatabaseTests
     public async Task ConcurrentAdminDeactivationsCannotRemoveAllActiveAdmins()
     {
         var other = CreateActor("second-admin", UserRole.Admin); var accounts = new AccountService(connection);
-        async Task<bool> Deactivate(UserSession user, string name)
+        var otherTarget = await TargetAsync(other.Username); var ownTarget = await TargetAsync(admin.Username);
+        async Task<bool> Deactivate(UserSession user, AccountTarget selected)
         {
-            try { await accounts.SetActiveAsync(user, name, false, default); return true; }
+            try { await accounts.SetActiveAsync(user, selected, false, default); return true; }
             catch (SessionRevokedException) { return false; }
         }
-        bool[] results = await Task.WhenAll(Deactivate(admin, other.Username), Deactivate(other, admin.Username));
+        bool[] results = await Task.WhenAll(Deactivate(admin, otherTarget), Deactivate(other, ownTarget));
         Assert.That(results.Count(r => r), Is.EqualTo(1));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.admin WHERE IsActive=1 AND RoleName=N'Admin'"), Is.EqualTo(1));
     }
@@ -396,11 +399,11 @@ public partial class GuideDatabaseTests
         var interrupted = new PaymentWorkflow(journal, new LostReplyGateway(service, false), actor);
         await Assert.ThrowsAsync<IOException>(async () => await interrupted.BeginAsync(PersonnelGroup.General, Person().Tc, 30m));
         byte[] saved = File.ReadAllBytes(journal.PathName);
-        var accounts = new AccountService(connection); await accounts.SetActiveAsync(admin, actor.Username, false, default);
+        var accounts = new AccountService(connection); await accounts.SetActiveAsync(admin, await TargetAsync(actor.Username), false, default);
         var old = new PaymentWorkflow(journal, service, actor);
         await Assert.ThrowsAsync<SessionRevokedException>(async () => await old.RetryAsync());
         Assert.That(File.ReadAllBytes(journal.PathName), Is.EqualTo(saved));
-        await accounts.SetActiveAsync(admin, actor.Username, true, default);
+        await accounts.SetActiveAsync(admin, await TargetAsync(actor.Username), true, default);
         var fresh = (await accounts.AuthenticateAsync(actor.Username, "Test-only-password-123"))!;
         var reopened = new PaymentWorkflow(journal, new PersonnelService(connection, fresh), fresh);
         Guid original = (await reopened.InspectAsync())!.Request.RequestId;
@@ -421,7 +424,7 @@ public partial class GuideDatabaseTests
             Assert.That(failure!.Number, Is.EqualTo(1222));
             await work.CommitAsync(default);
         }
-        await new AccountService(connection).SetActiveAsync(admin, actor.Username, false, default);
+        await new AccountService(connection).SetActiveAsync(admin, await TargetAsync(actor.Username), false, default);
         Assert.That(await AccountAuthorization.IsCurrentAsync(connection, actor, default), Is.False);
     }
     [TestCase(false)]
@@ -452,7 +455,7 @@ public partial class GuideDatabaseTests
         var flow = new PaymentWorkflow(journal, service, actor);
         Assert.That((await flow.RetryAsync()).Outcome.Status, Is.EqualTo(PaymentStatus.Rejected));
         byte[] saved = File.ReadAllBytes(journal.PathName);
-        await new AccountService(connection).SetActiveAsync(admin, actor.Username, false, default);
+        await new AccountService(connection).SetActiveAsync(admin, await TargetAsync(actor.Username), false, default);
         await Assert.ThrowsAsync<SessionRevokedException>(async () => await flow.AcknowledgeAsync());
         Assert.That(File.ReadAllBytes(journal.PathName), Is.EqualTo(saved));
         Assert.That(Scalar("SELECT PARA FROM dbo.Calisan"), Is.EqualTo(50m));
@@ -486,7 +489,7 @@ public partial class GuideDatabaseTests
         var data = await Service.ListAsync(null, default, "11111111111", "Ada", "Test"); Assert.That(data.Rows.Count, Is.EqualTo(1)); Assert.That(data.Rows[0]["PARA"], Is.EqualTo(125m));
         Assert.That(data.Rows[0].HasVersion(DataRowVersion.Original), Is.True);
         Assert.That((await Service.ListAsync(null, default, "", "%", "")).Rows.Count, Is.Zero); // wildcard treated literally
-        await Service.DeleteAsync(PersonnelGroup.General, Person().Tc); Assert.That(Scalar("SELECT COUNT(*) FROM dbo.Calisan"), Is.Zero);
+        await Service.DeleteAsync(PersonnelGroup.General, Person().Tc, await VersionAsync()); Assert.That(Scalar("SELECT COUNT(*) FROM dbo.Calisan"), Is.Zero);
         Assert.That(Scalar("SELECT SUM(Delta) FROM dbo.PaymentLedger"), Is.EqualTo(0m)); Assert.That(Scalar("SELECT COUNT(*) FROM dbo.PaymentLedger"), Is.EqualTo(3));
     }
     [Test, Category("Payments")]
@@ -550,7 +553,7 @@ public partial class GuideDatabaseTests
     {
         var group = (PersonnelGroup)groupId;
         await Service.SaveAsync(group, Person(), true); byte[] oldVersion = await VersionAsync(group);
-        await Service.DeleteAsync(group, Person().Tc); await Service.SaveAsync(group, Person(), true);
+        await Service.DeleteAsync(group, Person().Tc, await VersionAsync(group)); await Service.SaveAsync(group, Person(), true);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await Service.SaveAsync(group, Person() with { FirstName = "Eski ekran" }, false, expectedVersion: oldVersion));
         Assert.That((await Service.ListAsync(group)).Rows[0]["AD"], Is.EqualTo("Ada"));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action=N'Person.Update'"), Is.Zero);
@@ -574,7 +577,7 @@ public partial class GuideDatabaseTests
     {
         await Service.SaveAsync(PersonnelGroup.General, Person(), true);
         await Service.SaveAsync(PersonnelGroup.Joker, Person(tc: 22222222222L, amount: 200m), true);
-        await Service.SaveLeavesAsync([(Person().Tc, new(new DateTime(2026, 1, 1), new DateTime(2026, 1, 3)))]);
+        await Service.SaveLeavesAsync([(await LeaveSelectionAsync(), new(new DateTime(2026, 1, 1), new DateTime(2026, 1, 3)))]);
         await Service.PayAsync(PersonnelGroup.General, Person().Tc, 30m, Guid.NewGuid());
         int auditCount = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"));
         Execute("ALTER TABLE dbo.Calisan DROP COLUMN RecordVersion; ALTER TABLE dbo.Joker DROP COLUMN RecordVersion; DELETE FROM dbo.__MigrationJournal WHERE ScriptName LIKE N'%101-personnel-rowversion.sql:%'");
@@ -591,7 +594,7 @@ public partial class GuideDatabaseTests
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.izinler"), Is.EqualTo(1));
         Assert.That(Scalar("SELECT SUM(Delta) FROM dbo.PaymentLedger"), Is.EqualTo(270m));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"), Is.EqualTo(auditCount));
-        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(5));
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(6));
         Assert.That(Directory.GetFiles(backups, "*.bak"), Has.Length.EqualTo(1));
     }
     [Test, Category("Migrations")]
@@ -619,9 +622,9 @@ public partial class GuideDatabaseTests
     public async Task BulkLeavePlanRollsBackIfAnyPersonIsInvalid()
     {
         await Service.SaveAsync(PersonnelGroup.General, Person(), true); var leave = new LeavePeriod(new(2026, 10, 24), new(2026, 10, 26));
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await Service.SaveLeavesAsync([(Person().Tc, leave), (22222222222L, leave)]));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await Service.SaveLeavesAsync([(await LeaveSelectionAsync(), leave), (new LeaveTarget(22222222222L, new byte[8], null), leave)]));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.izinler"), Is.Zero);
-        await Service.SaveLeavesAsync([(Person().Tc, leave)]); Assert.That(Scalar("SELECT IzinSuresi FROM dbo.izinler"), Is.EqualTo(3));
+        await Service.SaveLeavesAsync([(await LeaveSelectionAsync(), leave)]); Assert.That(Scalar("SELECT IzinSuresi FROM dbo.izinler"), Is.EqualTo(3));
     }
     [Test, Category("Payments")]
     public async Task ConcurrentPaymentsCannotExceedBalanceAndRetriesAreIdempotent()
@@ -656,7 +659,7 @@ public partial class GuideDatabaseTests
         var journal = new PaymentJournal(connection, Path.Combine(directory, "pending-" + Guid.NewGuid().ToString("N")));
         var interrupted = new PaymentWorkflow(journal, new LostReplyGateway(Service, afterCommit: false), admin);
         await Assert.ThrowsAsync<IOException>(async () => await interrupted.BeginAsync(PersonnelGroup.General, Person().Tc, 30m));
-        await Service.DeleteAsync(PersonnelGroup.General, Person().Tc);
+        await Service.DeleteAsync(PersonnelGroup.General, Person().Tc, await VersionAsync());
         await Service.SaveAsync(PersonnelGroup.General, Person(amount: 200m), true);
 
         var reopened = new PaymentWorkflow(journal, Service, admin);
@@ -724,7 +727,7 @@ public partial class GuideDatabaseTests
         var group = (PersonnelGroup)groupValue;
         await Service.SaveAsync(group, Person(), true);
         Guid oldPayment = await Service.PayAsync(group, Person().Tc, paid, Guid.NewGuid());
-        await Service.DeleteAsync(group, Person().Tc);
+        await Service.DeleteAsync(group, Person().Tc, await VersionAsync(group));
         await Service.SaveAsync(group, Person(amount: 200m), true);
         int auditCount = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"));
         int ledgerCount = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.PaymentLedger"));
@@ -746,7 +749,7 @@ public partial class GuideDatabaseTests
         var group = (PersonnelGroup)groupValue;
         await Service.SaveAsync(group, Person(), true);
         await Service.PayAsync(group, Person().Tc, 30m, Guid.NewGuid());
-        await Service.DeleteAsync(group, Person().Tc);
+        await Service.DeleteAsync(group, Person().Tc, await VersionAsync(group));
         await Service.SaveAsync(group, Person(amount: 200m), true);
         Guid currentPayment = await Service.PayAsync(group, Person().Tc, 40m, Guid.NewGuid());
 
@@ -762,7 +765,7 @@ public partial class GuideDatabaseTests
         await Service.SaveAsync(PersonnelGroup.General, Person(), true);
         Guid payment = await Service.PayAsync(PersonnelGroup.General, Person().Tc, 30m, Guid.NewGuid());
         await Service.SaveAsync(PersonnelGroup.General, Person(tc: 22222222222L), true);
-        await Service.DeleteAsync(PersonnelGroup.General, 22222222222L);
+        await Service.DeleteAsync(PersonnelGroup.General, 22222222222L, await VersionAsync(tc: 22222222222L));
 
         await Service.ReversePaymentAsync(payment);
 
@@ -788,7 +791,7 @@ public partial class GuideDatabaseTests
     {
         Assert.That(name, Does.StartWith("AccountingAppGuideRegression_")); // Full mode never receives a production connection.
         var backup = new BackupService(connection, admin); await Service.SaveAsync(PersonnelGroup.General, Person(), true);
-        string path = await backup.BackupAsync(Path.Combine(directory, "restore-source")); await Service.DeleteAsync(PersonnelGroup.General, Person().Tc);
+        string path = await backup.BackupAsync(Path.Combine(directory, "restore-source")); await Service.DeleteAsync(PersonnelGroup.General, Person().Tc, await VersionAsync());
         var beforeRestore = admin;
         await backup.RestoreAsync(path, Path.Combine(directory, "restore-safety")); Assert.That(Scalar("SELECT PARA FROM dbo.Calisan"), Is.EqualTo(100m));
         Assert.That(await AccountAuthorization.IsCurrentAsync(connection, beforeRestore, default), Is.False);
@@ -821,7 +824,7 @@ public partial class GuideDatabaseTests
         File.Move(original + ".verified", selected + ".verified");
         for (int i = 1; i < 14; i++) File.Copy(selected, Path.Combine(folder, prefix + i.ToString("D4") + ".bak"));
         byte[] digest = System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(selected));
-        await Service.DeleteAsync(PersonnelGroup.General, Person().Tc);
+        await Service.DeleteAsync(PersonnelGroup.General, Person().Tc, await VersionAsync());
 
         await backup.RestoreAsync(selected, folder);
         admin = SessionFor("test-admin");
@@ -855,7 +858,7 @@ public partial class GuideDatabaseTests
 
             Assert.That(Scalar("SELECT PARA FROM dbo.Calisan"), Is.EqualTo(100m));
             Assert.That(await VersionAsync(), Has.Length.EqualTo(8));
-            Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(5));
+            Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(6));
             Assert.That(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(selected)), Is.EqualTo(digest));
             Assert.That(File.Exists(selected + ".verified"), Is.True);
             Assert.That(Directory.GetFiles(folder, prefix + "*.bak"), Has.Length.EqualTo(15));

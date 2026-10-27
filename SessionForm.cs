@@ -142,7 +142,7 @@ namespace WinFormsApp2
                 string id = AppLog.Failure(ex, "UI.Operation");
                 if (!IsDisposed && !lifetime.IsCancellationRequested)
                 {
-                    string message = ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or DatabaseConfigurationException ? ex.Message : "İşlem tamamlanamadı. Listeyi ve işlem geçmişini kontrol edin. Kod: " + id;
+                    string message = ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or DatabaseConfigurationException or BackupMirrorException ? ex.Message : "İşlem tamamlanamadı. Listeyi ve işlem geçmişini kontrol edin. Kod: " + id;
                     MessageBox.Show(this, message, "İşlem tamamlanamadı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
                 return false;

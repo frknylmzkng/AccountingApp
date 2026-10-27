@@ -43,7 +43,7 @@ public class TransactionTests
                 SOYAD nvarchar(100) NOT NULL, IBAN nvarchar(34) NOT NULL, PARA decimal(18,2) NOT NULL, RecordVersion rowversion NOT NULL);
             CREATE TABLE Joker (TC bigint PRIMARY KEY, AD nvarchar(100) NOT NULL,
                 SOYAD nvarchar(100) NOT NULL, IBAN nvarchar(34) NOT NULL, PARA decimal(18,2) NOT NULL, RecordVersion rowversion NOT NULL);
-            CREATE TABLE izinler (Id int IDENTITY PRIMARY KEY, TC bigint NOT NULL REFERENCES Calisan(TC),
+            CREATE TABLE izinler (Id int IDENTITY PRIMARY KEY, TC bigint NOT NULL REFERENCES Calisan(TC), LeaveVersion rowversion NOT NULL,
                 IZINBASLANGIC date NOT NULL, IZINBITIS date NOT NULL,
                 IzinSuresi AS DATEDIFF(day, IZINBASLANGIC, IZINBITIS),
                 CONSTRAINT ValidDates CHECK (IZINBITIS >= IZINBASLANGIC));
@@ -124,7 +124,7 @@ public class TransactionTests
         Store.Add(PersonnelGroup.General, Person(), ValidLeave);
         Execute(@"CREATE TRIGGER BlockLeaveChange ON izinler AFTER UPDATE AS
             BEGIN; THROW 51003, 'Deliberate test leave update failure', 1; END;");
-        Assert.Throws<SqlException>(() => Store.SaveLeave(Person().Tc,
+        Assert.Throws<SqlException>(() => Store.SaveLeave(LeaveSelection(),
             new LeavePeriod(ValidLeave.Start, ValidLeave.End.AddDays(2))));
         Assert.Multiple(() =>
         {
@@ -162,9 +162,9 @@ public class TransactionTests
     {
         Store.Add(PersonnelGroup.General, Person());
         Store.Add(PersonnelGroup.General, Person(22222222222L), ValidLeave);
-        Store.SaveLeave(Person().Tc, ValidLeave);
+        Store.SaveLeave(LeaveSelection(), ValidLeave);
         var changed = new LeavePeriod(ValidLeave.Start.AddMonths(1), ValidLeave.End.AddMonths(1));
-        Store.SaveLeave(Person().Tc, changed);
+        Store.SaveLeave(LeaveSelection(), changed);
         Assert.Multiple(() =>
         {
             Assert.That(Scalar("SELECT COUNT(*) FROM izinler"), Is.EqualTo(2));
@@ -180,7 +180,7 @@ public class TransactionTests
         Assert.Throws<ArgumentException>(() => Store.Add(PersonnelGroup.General, Person(), InvalidLeave));
         Assert.That(Scalar("SELECT COUNT(*) FROM Calisan"), Is.EqualTo(0));
         Store.Add(PersonnelGroup.General, Person(), ValidLeave);
-        Assert.Throws<ArgumentException>(() => Store.SaveLeave(Person().Tc, InvalidLeave));
+        Assert.Throws<ArgumentException>(() => Store.SaveLeave(LeaveSelection(), InvalidLeave));
         Assert.That(Scalar("SELECT IZINBITIS FROM izinler"), Is.EqualTo(ValidLeave.End));
     }
 
@@ -189,7 +189,7 @@ public class TransactionTests
     public void LeaveCannotBeSavedForMissingOrJokerEmployee(bool joker)
     {
         if (joker) Store.Add(PersonnelGroup.Joker, Person());
-        Assert.Throws<InvalidOperationException>(() => Store.SaveLeave(Person().Tc, ValidLeave));
+        Assert.Throws<InvalidOperationException>(() => Store.SaveLeave(LeaveSelection(), ValidLeave));
         Assert.That(Scalar("SELECT COUNT(*) FROM izinler"), Is.EqualTo(0));
     }
 
@@ -197,7 +197,7 @@ public class TransactionTests
     public void SameDayLeaveIsAllowed()
     {
         Store.Add(PersonnelGroup.General, Person());
-        Store.SaveLeave(Person().Tc, new LeavePeriod(ValidLeave.Start, ValidLeave.Start));
+        Store.SaveLeave(LeaveSelection(), new LeavePeriod(ValidLeave.Start, ValidLeave.Start));
         Assert.That(Scalar("SELECT IZINBITIS FROM izinler"), Is.EqualTo(ValidLeave.Start));
     }
 
@@ -207,7 +207,7 @@ public class TransactionTests
         Store.Add(PersonnelGroup.General, Person(), ValidLeave);
         Execute("INSERT INTO izinler (TC,IZINBASLANGIC,IZINBITIS) VALUES (11111111111,'20260201','20260203')");
         Store.Update(PersonnelGroup.General, Person() with { Amount = 2000m }, (byte[])Scalar("SELECT RecordVersion FROM Calisan")!);
-        Assert.Throws<InvalidOperationException>(() => Store.SaveLeave(Person().Tc,
+        Assert.Throws<InvalidOperationException>(() => Store.SaveLeave(LeaveSelection(),
             new LeavePeriod(new DateTime(2026, 3, 1), new DateTime(2026, 3, 3))));
         Assert.That(Scalar("SELECT COUNT(DISTINCT IZINBASLANGIC) FROM izinler"), Is.EqualTo(2));
         Assert.That(Scalar("SELECT MIN(IZINBASLANGIC) FROM izinler"), Is.EqualTo(ValidLeave.Start));
@@ -218,8 +218,10 @@ public class TransactionTests
     public async Task ConcurrentFirstLeaveSavesCannotCreateDuplicateRows()
     {
         Store.Add(PersonnelGroup.General, Person());
-        await Task.WhenAll(Task.Run(() => Store.SaveLeave(Person().Tc, ValidLeave)),
-            Task.Run(() => Store.SaveLeave(Person().Tc, ValidLeave)));
+        var selection = LeaveSelection();
+        bool[] results = await Task.WhenAll(Task.Run(() => Attempt(() => Store.SaveLeave(selection, ValidLeave))),
+            Task.Run(() => Attempt(() => Store.SaveLeave(selection, ValidLeave))));
+        Assert.That(results.Count(success => success), Is.EqualTo(1));
         Assert.That(Scalar("SELECT COUNT(*) FROM izinler"), Is.EqualTo(1));
     }
 
@@ -229,7 +231,7 @@ public class TransactionTests
         Store.Add(PersonnelGroup.General, Person());
         Execute(@"CREATE TRIGGER BlockLeaveChange ON izinler AFTER INSERT AS
             BEGIN; THROW 51003, 'Deliberate test leave insert failure', 1; END;");
-        Assert.Throws<SqlException>(() => Store.SaveLeave(Person().Tc, ValidLeave));
+        Assert.Throws<SqlException>(() => Store.SaveLeave(LeaveSelection(), ValidLeave));
         Assert.That(Scalar("SELECT COUNT(*) FROM Calisan"), Is.EqualTo(1));
         Assert.That(Scalar("SELECT COUNT(*) FROM izinler"), Is.EqualTo(0));
     }
@@ -240,7 +242,7 @@ public class TransactionTests
         Store.Add(PersonnelGroup.General, Person(), ValidLeave);
         Execute(@"CREATE TRIGGER BlockEmployeeDelete ON Calisan AFTER DELETE AS
             BEGIN; THROW 51000, 'Deliberate test deletion failure', 1; END;");
-        Assert.Throws<SqlException>(() => Store.Delete(PersonnelGroup.General, Person().Tc));
+        Assert.Throws<SqlException>(() => Store.Delete(PersonnelGroup.General, Person().Tc, (byte[])Scalar("SELECT RecordVersion FROM Calisan WHERE TC=11111111111")!));
         Assert.That(Scalar("SELECT COUNT(*) FROM Calisan"), Is.EqualTo(1));
         Assert.That(Scalar("SELECT COUNT(*) FROM izinler"), Is.EqualTo(1));
     }
@@ -250,7 +252,7 @@ public class TransactionTests
     {
         Store.Add(PersonnelGroup.General, Person(), ValidLeave);
         Store.Add(PersonnelGroup.General, Person(22222222222L), ValidLeave);
-        Store.Delete(PersonnelGroup.General, Person().Tc);
+        Store.Delete(PersonnelGroup.General, Person().Tc, (byte[])Scalar("SELECT RecordVersion FROM Calisan WHERE TC=11111111111")!);
         Assert.That(Scalar("SELECT TC FROM Calisan"), Is.EqualTo(22222222222L));
         Assert.That(Scalar("SELECT TC FROM izinler"), Is.EqualTo(22222222222L));
     }
@@ -259,7 +261,7 @@ public class TransactionTests
     public void JokerDeleteCannotDeleteGeneralEmployeeOrLeaves()
     {
         Store.Add(PersonnelGroup.General, Person(), ValidLeave);
-        Assert.Throws<InvalidOperationException>(() => Store.Delete(PersonnelGroup.Joker, Person().Tc));
+        Assert.Throws<InvalidOperationException>(() => Store.Delete(PersonnelGroup.Joker, Person().Tc, (byte[])Scalar("SELECT RecordVersion FROM Calisan WHERE TC=11111111111")!));
         Assert.That(Scalar("SELECT COUNT(*) FROM Calisan"), Is.EqualTo(1));
         Assert.That(Scalar("SELECT COUNT(*) FROM izinler"), Is.EqualTo(1));
     }
@@ -269,7 +271,7 @@ public class TransactionTests
     {
         Store.Add(PersonnelGroup.General, Person(), ValidLeave);
         Execute("INSERT INTO Joker(TC,AD,SOYAD,IBAN,PARA) SELECT TC,AD,SOYAD,IBAN,PARA FROM Calisan");
-        Store.Delete(PersonnelGroup.Joker, Person().Tc);
+        Store.Delete(PersonnelGroup.Joker, Person().Tc, (byte[])Scalar("SELECT RecordVersion FROM Joker WHERE TC=11111111111")!);
         Assert.That(Scalar("SELECT COUNT(*) FROM Joker"), Is.EqualTo(0));
         Assert.That(Scalar("SELECT COUNT(*) FROM Calisan"), Is.EqualTo(1));
         Assert.That(Scalar("SELECT COUNT(*) FROM izinler"), Is.EqualTo(1));
@@ -279,7 +281,7 @@ public class TransactionTests
     public void GeneralDeleteCannotDeleteJokerEmployee()
     {
         Store.Add(PersonnelGroup.Joker, Person());
-        Assert.Throws<InvalidOperationException>(() => Store.Delete(PersonnelGroup.General, Person().Tc));
+        Assert.Throws<InvalidOperationException>(() => Store.Delete(PersonnelGroup.General, Person().Tc, (byte[])Scalar("SELECT RecordVersion FROM Joker WHERE TC=11111111111")!));
         Assert.That(Scalar("SELECT COUNT(*) FROM Joker"), Is.EqualTo(1));
     }
 
@@ -327,28 +329,8 @@ public class TransactionTests
     public void MissingRecordDeletionIsRejectedWithoutRemovingOtherRecords()
     {
         Store.Add(PersonnelGroup.Joker, Person());
-        Assert.Throws<InvalidOperationException>(() => Store.Delete(PersonnelGroup.Joker, 22222222222L));
+        Assert.Throws<InvalidOperationException>(() => Store.Delete(PersonnelGroup.Joker, 22222222222L, new byte[8]));
         Assert.That(Scalar("SELECT TC FROM Joker"), Is.EqualTo(Person().Tc));
-    }
-
-    [Test]
-    public void LastAdminCannotBeDeleted()
-    {
-        Admins.Add("alpha", "secret");
-        Assert.Throws<InvalidOperationException>(() => Admins.Delete("alpha"));
-        Assert.That(Scalar("SELECT username FROM admin"), Is.EqualTo("alpha"));
-    }
-
-    [Test]
-    public async Task ConcurrentAdminDeletionKeepsOneAccount()
-    {
-        Admins.Add("alpha", "secret");
-        Admins.Add("beta", "secret");
-        bool[] results = await Task.WhenAll(
-            Task.Run(() => Attempt(() => Admins.Delete("alpha"))),
-            Task.Run(() => Attempt(() => Admins.Delete("beta"))));
-        Assert.That(results.Count(success => success), Is.EqualTo(1));
-        Assert.That(Scalar("SELECT COUNT(*) FROM admin"), Is.EqualTo(1));
     }
 
     [Test]
@@ -492,6 +474,26 @@ public class TransactionTests
         catch (InvalidOperationException) { return false; }
         catch (SqlException) { return false; }
     }
+
+    [TestCase(true)]
+    [TestCase(false)]
+    public void LegacyStoreDeleteAlsoRejectsARecreatedRecord(bool general)
+    {
+        var group = general ? PersonnelGroup.General : PersonnelGroup.Joker;
+        string table = general ? "Calisan" : "Joker";
+        Store.Add(group, Person(), general ? ValidLeave : null);
+        byte[] version = (byte[])Scalar($"SELECT RecordVersion FROM {table}")!;
+        Store.Delete(group, Person().Tc, version);
+        Store.Add(group, Person() with { FirstName = "Replacement" }, general ? ValidLeave : null);
+        var error = Assert.Throws<InvalidOperationException>(() => Store.Delete(group, Person().Tc, version));
+        Assert.That(error!.Message, Is.EqualTo(PersonnelConcurrency.ConflictMessage));
+        Assert.That(Scalar($"SELECT AD FROM {table}"), Is.EqualTo("Replacement"));
+        Assert.That(Scalar("SELECT COUNT(*) FROM izinler"), Is.EqualTo(general ? 1 : 0));
+    }
+
+    private LeaveTarget LeaveSelection(long tc = 11111111111L) => new(tc,
+        Scalar($"SELECT RecordVersion FROM Calisan WHERE TC={tc}") as byte[] ?? new byte[8],
+        Scalar($"SELECT LeaveVersion FROM izinler WHERE TC={tc}") as byte[]);
 
     private void Execute(string sql)
     {

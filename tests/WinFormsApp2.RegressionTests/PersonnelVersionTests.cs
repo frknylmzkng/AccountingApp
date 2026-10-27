@@ -34,6 +34,19 @@ public class PersonnelVersionTests
         byte[]? version = length < 0 ? null : new byte[length];
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await service.SaveAsync(PersonnelGroup.General, person, false, expectedVersion: version));
     }
+    [TestCase(-1)]
+    [TestCase(0)]
+    [TestCase(7)]
+    [TestCase(9)]
+    public async Task DeleteRequiresAValidVersionBeforeDatabaseAccess(int length)
+    {
+        var service = new PersonnelService("invalid connection string", new("operator", UserRole.PersonnelManager));
+        byte[]? version = length < 0 ? null : new byte[length];
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () => await service.DeleteAsync(PersonnelGroup.General, 11111111111L, version));
+        Assert.That(error!.Message, Does.Contain("sürüm bilgisi eksik"));
+        var store = new PersonnelStore("invalid connection string");
+        Assert.Throws<InvalidOperationException>(() => store.Delete(PersonnelGroup.General, 11111111111L, version));
+    }
     [Test]
     public void SelectedVersionComesFromOriginalRowAndReturnsDefensiveCopy()
     {

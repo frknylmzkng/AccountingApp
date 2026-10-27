@@ -5,7 +5,7 @@ using Microsoft.Data.SqlClient;
 
 namespace WinFormsApp2;
 
-internal sealed class BackupService(string connectionString, UserSession user)
+internal sealed partial class BackupService(string connectionString, UserSession user)
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private SqlConnectionStringBuilder Builder => new(connectionString);
@@ -41,22 +41,11 @@ internal sealed class BackupService(string connectionString, UserSession user)
             AtomicFile.Write(path + ".verified", Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("O")));
         }
         catch { if (File.Exists(path)) File.Delete(path); throw; }
+        // Local success is recorded independently of the optional external copy.
+        await RecordAuditAsync("Backup.Create", token).ConfigureAwait(false);
         Prune(folder, Prefix(name), 14, protectedBackupPath);
-        if (!string.IsNullOrWhiteSpace(mirror))
-        {
-            try
-            {
-                Directory.CreateDirectory(mirror); string target = Path.GetFullPath(Path.Combine(mirror, Path.GetFileName(path)));
-                if (!string.Equals(target, path, StringComparison.OrdinalIgnoreCase))
-                {
-                    string temporary = target + ".copying";
-                    try { File.Copy(path, temporary, true); File.Move(temporary, target, true); } finally { if (File.Exists(temporary)) File.Delete(temporary); }
-                }
-                Prune(mirror, Prefix(name), 14, protectedBackupPath);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { AppLog.Failure(ex, "Backup.Mirror"); throw new IOException("Ana yedek alındı; aynalama klasörüne kopyalanamadı. Ana yedek korunuyor."); }
-        }
-        await RecordAuditAsync("Backup.Create", token).ConfigureAwait(false); return path;
+        if (!string.IsNullOrWhiteSpace(mirror)) await MirrorCoreAsync(path, mirror, name, token).ConfigureAwait(false);
+        return path;
     }
     internal static void Prune(string folder, string prefix, int keep, string? protectedBackupPath = null)
     {
@@ -68,16 +57,32 @@ internal sealed class BackupService(string connectionString, UserSession user)
             string absolute = Path.GetFullPath(path);
             if (string.Equals(absolute, protectedPath, StringComparison.OrdinalIgnoreCase)) continue;
             if (string.Equals(Path.GetDirectoryName(absolute), root.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase) && (File.GetAttributes(absolute) & FileAttributes.ReparsePoint) == 0)
-            { File.Delete(absolute); if (File.Exists(absolute + ".verified")) File.Delete(absolute + ".verified"); }
+            {
+                File.Delete(absolute);
+                if (File.Exists(absolute + ".verified")) File.Delete(absolute + ".verified");
+                if (File.Exists(absolute + ".mirror.json")) File.Delete(absolute + ".mirror.json");
+            }
         }
     }
-    public async Task<bool> EnsureDailyAsync(CancellationToken token = default)
+    public Task<bool> EnsureDailyAsync(CancellationToken token = default)
     {
-        await AccountAuthorization.ValidateAsync(connectionString, user, AccountAccess.Admin, token).ConfigureAwait(false);
-        user.DemandAdmin(); var preferences = UserPreferences.Load(); string folder = string.IsNullOrWhiteSpace(preferences.BackupFolder) ? DefaultFolder : preferences.BackupFolder;
-        string name = await CatalogAsync(token).ConfigureAwait(false); string prefix = Prefix(name);
-        if (Directory.Exists(folder) && Directory.EnumerateFiles(folder, prefix + "*.bak").Any(p => File.Exists(p + ".verified") && File.GetLastWriteTimeUtc(p + ".verified") > DateTime.UtcNow.AddHours(-24))) return false;
-        await BackupAsync(folder, preferences.MirrorFolder, token).ConfigureAwait(false); return true;
+        var preferences = UserPreferences.Load();
+        return EnsureDailyAsync(string.IsNullOrWhiteSpace(preferences.BackupFolder) ? DefaultFolder : preferences.BackupFolder, preferences.MirrorFolder, token);
+    }
+    internal async Task<bool> EnsureDailyAsync(string folder, string mirror, CancellationToken token = default)
+    {
+        user.DemandAdmin(); await Gate.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            await AccountAuthorization.ValidateAsync(connectionString, user, AccountAccess.Admin, token).ConfigureAwait(false);
+            string name = await CatalogAsync(token).ConfigureAwait(false); ValidateCatalog(name);
+            string? recent = LatestVerified(folder, Prefix(name), DateTime.UtcNow.AddHours(-24));
+            if (recent == null) { await BackupCoreAsync(folder, mirror, null, token).ConfigureAwait(false); return true; }
+            // A local success must not suppress retrying a missing/failed mirror.
+            if (!string.IsNullOrWhiteSpace(mirror)) await MirrorCoreAsync(recent, mirror, name, token).ConfigureAwait(false);
+            return false; // No new local backup was necessary, even if its mirror was repaired.
+        }
+        finally { Gate.Release(); }
     }
     public async Task RestoreAsync(string backupPath, string safetyFolder, CancellationToken token = default)
     {

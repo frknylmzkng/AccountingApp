@@ -27,7 +27,7 @@ public partial class GuideDatabaseTests
         await FailLogins(admin.Username, 2);
         await SchemaUpgrade.PrepareAsync(connection);
         Assert.That(FailureCount, Is.EqualTo(2));
-        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(5));
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(6));
     }
 
     [Test, Category("LoginThrottle")]
@@ -126,7 +126,7 @@ public partial class GuideDatabaseTests
     {
         await FailLogins("missing-account", 6);
         var inactive = CreateActor("inactive-user", UserRole.Viewer);
-        await Accounts.SetActiveAsync(admin, inactive.Username, false, default);
+        await Accounts.SetActiveAsync(admin, await TargetAsync(inactive.Username), false, default);
         await FailLogins(inactive.Username, 5);
         var actor = CreateActor("reset-user", UserRole.Viewer);
         var reset = await Accounts.ResetPasswordAsync(admin, await TargetAsync(actor.Username), KnownPassword);
@@ -178,7 +178,7 @@ public partial class GuideDatabaseTests
     {
         var actor = CreateActor("replace-user", UserRole.Viewer);
         await FailLogins(actor.Username, 5);
-        await Accounts.DeleteAsync(admin, actor.Username, default);
+        await Accounts.DeleteAsync(admin, await TargetAsync(actor.Username), default);
         Assert.That(FailureCount, Is.Zero);
         await Accounts.AddAsync(admin, actor.Username, KnownPassword, UserRole.Viewer, default);
         Assert.That(await Accounts.AuthenticateAsync(actor.Username, KnownPassword), Is.Not.Null);

@@ -48,10 +48,12 @@ public partial class Admin : SessionForm
     }
     private async Task SetActiveAsync(bool active)
     {
-        if (!RecordSelection.TryGetKey(adminView, "username", out string username)) { MessageBox.Show(this, "Listeden bir hesap seçin."); return; }
-        string question = active ? $"{username} hesabı etkinleştirilsin mi?" : $"{username} hesabı pasife alınsın mı? Açık oturumları sona erecek ve yeniden giriş yapamayacak.";
+        AccountTarget target;
+        try { target = AccountTarget.FromGrid(adminView); }
+        catch (InvalidOperationException ex) { MessageBox.Show(this, ex.Message); return; }
+        string question = active ? $"{target.Username} hesabı etkinleştirilsin mi?" : $"{target.Username} hesabı pasife alınsın mı? Açık oturumları sona erecek ve yeniden giriş yapamayacak.";
         if (MessageBox.Show(this, question, "Hesap durumu", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-        if (await RunOperationAsync(token => new AccountService(AppDatabase.ConnectionString).SetActiveAsync(User, username, active, token), active ? "Hesap etkinleştirildi." : "Hesap pasife alındı.") && !IsDisposed) await LoadDataAsync();
+        if (await RunOperationAsync(token => new AccountService(AppDatabase.ConnectionString).SetActiveAsync(User, target, active, token), active ? "Hesap etkinleştirildi." : "Hesap pasife alındı.") && !IsDisposed) await LoadDataAsync();
     }
     private async void ekle_btn_Click(object sender, EventArgs e)
     {
@@ -62,8 +64,10 @@ public partial class Admin : SessionForm
     }
     private async void sil_btn_Click(object sender, EventArgs e)
     {
-        if (!RecordSelection.TryGetKey(adminView, "username", out string username)) return;
-        if (MessageBox.Show(this, $"{username} hesabı silinsin mi?", "Hesap sil", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
-        if (await RunOperationAsync(token => new AccountService(AppDatabase.ConnectionString).DeleteAsync(User, username, token), "Hesap silindi.") && !IsDisposed) await LoadDataAsync();
+        AccountTarget target;
+        try { target = AccountTarget.FromGrid(adminView); }
+        catch (InvalidOperationException ex) { MessageBox.Show(this, ex.Message); return; }
+        if (MessageBox.Show(this, $"{target.Username} hesabı silinsin mi?", "Hesap sil", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        if (await RunOperationAsync(token => new AccountService(AppDatabase.ConnectionString).DeleteAsync(User, target, token), "Hesap silindi.") && !IsDisposed) await LoadDataAsync();
     }
 }

@@ -267,6 +267,7 @@ ServiceFabricBackup/
 *.ndf
 *.bak
 *.bak.verified
+*.bak.mirror.json
 *.draft
 *.pending
 *.pending.lock

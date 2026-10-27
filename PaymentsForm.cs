@@ -17,6 +17,7 @@ internal sealed partial class PaymentsForm : SessionForm
     private PaymentState? pending;
     private bool paymentStateLoaded;
     private PaymentWorkflow Workflow => new(AppDatabase.ConnectionString, User);
+    internal Action<IWin32Window, PrintReport, bool> PreviewReport = PaymentPrinting.Preview;
     public PaymentsForm()
     {
         Text = "Personel ödemeleri ve defteri"; ClientSize = new Size(1080, 680);
@@ -108,30 +109,17 @@ internal sealed partial class PaymentsForm : SessionForm
     private async void Receipt(object? sender, EventArgs e)
     {
         var row = SelectedPayment(); if (row == null) { MessageBox.Show(this, "Defterden bir ödeme satırı seçin."); return; }
-        var lines = new List<string> { $"Personel: TC {PaymentPrinting.Mask(row["TC"].ToString()!)}", $"Tutar: {-Convert.ToDecimal(row["Delta"]):N2} TL", $"Kayıt UTC: {row["CreatedUtc"]}", $"Durum: {(row["ReversedUtc"] == DBNull.Value ? "Kaydedildi" : "İptal edildi")}" };
-        string tc = row["TC"].ToString()!; var group = (PersonnelGroup)Convert.ToInt32(row["PersonnelGroup"]); string reference = ((Guid)row["RequestId"]).ToString("N");
-        if (!await RunOperationAsync(async token =>
-        {
-            var persons = await People.ListAsync(group, token, tc);
-            if (persons.Rows.Count == 0) lines.Add("Personel artık etkin listede yok.");
-            else
-            {
-                var person = persons.Rows[0]; lines.Add("IBAN: " + PaymentPrinting.Mask(person["IBAN"].ToString()!)); lines.Add($"Güncel kalan tutar: {person["PARA"]:N2} TL");
-                if (person["IZINBASLANGIC"] is DateTime start && person["IZINBITIS"] is DateTime end) lines.Add($"İzin: {start:dd.MM.yyyy} – {end:dd.MM.yyyy} ({Calculations.LeaveDays(start,end)} gün)");
-            }
-        }) || IsDisposed) return;
-        var report = new PrintReport("PERSONEL ÖDEME FİŞİ", lines, reference);
-        try { PaymentPrinting.Preview(this, report, thermal.Checked); } catch (Exception ex) { AppLog.Failure(ex, "Print.Preview"); MessageBox.Show(this, "Önizleme açılamadı. Yazıcı sürücüsünü kontrol edin."); }
+        Guid requestId = (Guid)row["RequestId", DataRowVersion.Original];
+        bool paper = thermal.Checked; PrintReport? report = null;
+        if (!await RunOperationAsync(async token => report = await new PaymentReportService(AppDatabase.ConnectionString, User).ReceiptAsync(requestId, token)) || IsDisposed) return;
+        try { PreviewReport(this, report!, paper); } catch (Exception ex) { AppLog.Failure(ex, "Print.Preview"); MessageBox.Show(this, "Önizleme açılamadı. Yazıcı sürücüsünü kontrol edin."); }
     }
     private async void PrintClosing(object? sender, EventArgs e)
     {
-        if (!await RunOperationAsync(token => AccountAuthorization.ValidateAsync(AppDatabase.ConnectionString, User, AccountAccess.Read, token)) || IsDisposed) return;
-        if (ledger.DataSource is not DataTable data || !MoneyInput.TryParse(declared.Text, out decimal counted) || counted < 0) { MessageBox.Show(this, "Beyan edilen günlük toplamı girin."); return; }
-        var rows = data.AsEnumerable().Where(r => r.Field<string>("Kind") == "Payment" && r["ReversedUtc"] == DBNull.Value && DateTime.SpecifyKind(r.Field<DateTime>("CreatedUtc"), DateTimeKind.Utc).ToLocalTime().Date == day.Value.Date).ToArray();
-        decimal total = -rows.Sum(r => r.Field<decimal>("Delta"));
-        var lines = new List<string> { $"Gün: {day.Value:dd.MM.yyyy}", $"Geçerli ödeme sayısı: {rows.Length}", $"Kayıt toplamı: {total:N2} TL", $"Beyan edilen: {counted:N2} TL" };
-        lines.AddRange(rows.Select(r => $"TC …{r.Field<long>("TC").ToString()[^4..]}   {-r.Field<decimal>("Delta"):N2} TL"));
-        try { PaymentPrinting.Preview(this, new("GÜNLÜK ÖDEME KAPANIŞI", lines, "closing-" + day.Value.ToString("yyyyMMdd"), counted - total), thermal.Checked); }
+        if (!MoneyInput.TryParse(declared.Text, out decimal counted) || counted < 0) { MessageBox.Show(this, "Beyan edilen günlük toplamı girin."); return; }
+        DateTime selectedDay = day.Value.Date; bool paper = thermal.Checked; PrintReport? report = null;
+        if (!await RunOperationAsync(async token => report = await new PaymentReportService(AppDatabase.ConnectionString, User).ClosingAsync(selectedDay, counted, token)) || IsDisposed) return;
+        try { PreviewReport(this, report!, paper); }
         catch (Exception ex) { AppLog.Failure(ex, "Print.Closing"); MessageBox.Show(this, "Kapanış önizlemesi açılamadı."); }
     }
 }

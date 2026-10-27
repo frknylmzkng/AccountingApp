@@ -10,7 +10,7 @@ internal sealed class PersonnelService(string connectionString, UserSession user
         await using var work = await SqlUnitOfWork.OpenAsync(connectionString, token).ConfigureAwait(false);
         await AccountAuthorization.DemandAsync(work, user, AccountAccess.Read, token).ConfigureAwait(false);
         const string all = "SELECT TC,AD,SOYAD,IBAN,PARA,N'Genel' GRUP,RecordVersion FROM dbo.Calisan UNION ALL SELECT TC,AD,SOYAD,IBAN,PARA,N'Joker',RecordVersion FROM dbo.Joker";
-        using var cmd = work.Command($@"SELECT P.*,I.IZINBASLANGIC,I.IZINBITIS,I.IzinSuresi FROM ({all}) P
+        using var cmd = work.Command($@"SELECT P.*,I.IZINBASLANGIC,I.IZINBITIS,I.IzinSuresi,I.LeaveVersion FROM ({all}) P
             LEFT JOIN dbo.izinler I ON P.TC=I.TC AND P.GRUP=N'Genel'
             WHERE (@group=N'' OR P.GRUP=@group) AND (@tc=N'' OR CONVERT(nvarchar(20),P.TC)=@tc)
             AND P.AD LIKE @first ESCAPE '~' AND P.SOYAD LIKE @last ESCAPE '~' ORDER BY P.TC,I.IZINBASLANGIC");
@@ -18,6 +18,7 @@ internal sealed class PersonnelService(string connectionString, UserSession user
         static string Like(string text) => "%" + text.Replace("~", "~~").Replace("%", "~%").Replace("_", "~_").Replace("[", "~[") + "%";
         cmd.Text("@first", Like(first), 210); cmd.Text("@last", Like(last), 210);
         var result = await cmd.TableAsync(token).ConfigureAwait(false); result.Columns["TC"]!.ReadOnly = true; result.Columns[PersonnelConcurrency.ColumnName]!.ReadOnly = true;
+        result.Columns[LeaveTarget.ColumnName]!.ReadOnly = true;
         await work.CommitAsync(token).ConfigureAwait(false); return result;
     }
     public async Task SaveAsync(PersonnelGroup group, PersonnelDetails person, bool insert, CancellationToken token = default, byte[]? expectedVersion = null)
@@ -42,24 +43,29 @@ internal sealed class PersonnelService(string connectionString, UserSession user
         await AuditAsync(work, insert ? "Person.Add" : "Person.Update", token).ConfigureAwait(false);
         await work.CommitAsync(token).ConfigureAwait(false); AppLog.Event(insert ? "Person.Add" : "Person.Update");
     }
-    public async Task DeleteAsync(PersonnelGroup group, long tc, CancellationToken token = default)
+    public async Task DeleteAsync(PersonnelGroup group, long tc, byte[]? expectedVersion, CancellationToken token = default)
     {
-        user.DemandEdit(); await using var work = await SqlUnitOfWork.OpenAsync(connectionString, token).ConfigureAwait(false);
+        user.DemandEdit(); byte[] version = PersonnelConcurrency.RequireVersion(expectedVersion);
+        await using var work = await SqlUnitOfWork.OpenAsync(connectionString, token).ConfigureAwait(false);
         await AccountAuthorization.DemandAsync(work, user, AccountAccess.Edit, token).ConfigureAwait(false);
-        decimal balance = await new PersonnelRepository(work).LockPersonAsync(group, tc, token).ConfigureAwait(false);
+        // Validate and lock the selected version before touching its leaves or ledger.
+        decimal balance = await new PersonnelRepository(work).LockPersonAsync(group, tc, token, version).ConfigureAwait(false);
         if (group == PersonnelGroup.General) { using var leaves = work.Command("DELETE FROM dbo.izinler WHERE TC=@tc"); leaves.Tc(tc); await leaves.ExecuteNonQueryAsync(token).ConfigureAwait(false); }
-        using var cmd = work.Command($"DELETE FROM {PersonnelRepository.Table(group)} WHERE TC=@tc"); cmd.Tc(tc); await cmd.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+        using var cmd = work.Command($"DELETE FROM {PersonnelRepository.Table(group)} WHERE TC=@tc AND RecordVersion=@version"); cmd.Tc(tc); cmd.Parameters.Add("@version", SqlDbType.Binary, 8).Value = version;
+        if (await cmd.ExecuteNonQueryAsync(token).ConfigureAwait(false) != 1) throw new InvalidOperationException(PersonnelConcurrency.ConflictMessage);
         await LedgerAsync(work, group, tc, -balance, "Closure", null, token).ConfigureAwait(false);
         await AuditAsync(work, "Person.Delete", token).ConfigureAwait(false); await work.CommitAsync(token).ConfigureAwait(false); AppLog.Event("Person.Delete");
     }
-    public async Task SaveLeavesAsync(IReadOnlyList<(long Tc, LeavePeriod Leave)> plan, CancellationToken token = default)
+    public async Task SaveLeavesAsync(IReadOnlyList<(LeaveTarget Target, LeavePeriod Leave)> plan, CancellationToken token = default)
     {
-        user.DemandEdit(); if (plan.Count == 0 || plan.Select(p => p.Tc).Distinct().Count() != plan.Count) throw new ArgumentException("İzin planı boş veya aynı personel birden fazla kez seçilmiş.");
-        foreach (var p in plan) _ = Calculations.LeaveDays(p.Leave.Start, p.Leave.End);
+        user.DemandEdit();
+        var snapshots = plan.Select(p => (Target: LeaveTarget.RequireSnapshot(p.Target), p.Leave)).ToArray();
+        if (snapshots.Length == 0 || snapshots.Select(p => p.Target.Tc).Distinct().Count() != snapshots.Length) throw new ArgumentException("İzin planı boş veya aynı personel birden fazla kez seçilmiş.");
+        foreach (var p in snapshots) _ = Calculations.LeaveDays(p.Leave.Start, p.Leave.End);
         await using var work = await SqlUnitOfWork.OpenAsync(connectionString, token).ConfigureAwait(false);
         await AccountAuthorization.DemandAsync(work, user, AccountAccess.Edit, token).ConfigureAwait(false);
         var repo = new PersonnelRepository(work);
-        foreach (var p in plan.OrderBy(p => p.Tc)) await repo.SaveLeaveAsync(p.Tc, p.Leave, token).ConfigureAwait(false);
+        foreach (var p in snapshots.OrderBy(p => p.Target.Tc)) await repo.SaveLeaveAsync(p.Target, p.Leave, token).ConfigureAwait(false);
         await AuditAsync(work, "Leave.SavePlan", token).ConfigureAwait(false); await work.CommitAsync(token).ConfigureAwait(false); AppLog.Event("Leave.SavePlan");
     }
     public async Task<Guid> PayAsync(PersonnelGroup group, long tc, decimal amount, Guid requestId, CancellationToken token = default)
