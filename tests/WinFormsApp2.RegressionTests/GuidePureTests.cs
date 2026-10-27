@@ -250,7 +250,7 @@ public class GuideUiTests
         if (form is Genel or Joker or Search or Contact or Admin or PaymentsForm or SettingsForm or LeavePlanForm or PasswordChangeForm)
         foreach (var size in form is PaymentsForm or SettingsForm or LeavePlanForm or PasswordChangeForm ? new[] { form.Size, form.MinimumSize, new Size(1920, 1080) } : new[] { form.Size })
         {
-            form.Size = size; form.PerformLayout();
+            ResponsiveTestWindow.ResizeDevice(form, size); form.PerformLayout();
             foreach (var control in AppTheme.Descendants(form).Where(c => c is Button or TextBox or DateTimePicker or ComboBox))
             {
                 // Responsive sections intentionally scroll at the new small sizes.

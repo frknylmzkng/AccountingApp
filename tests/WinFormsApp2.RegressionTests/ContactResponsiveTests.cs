@@ -22,7 +22,7 @@ public class ContactResponsiveTests
             cards[i].Text = "Örnek iletişim kişisi " + (i + 1);
             cards[i].Phone.Text = "+90 (555) 000 00 0" + (i + 1);
         }
-        form.Show(); AppTheme.Apply(form, classicOverride: true);
+        ResponsiveTestWindow.Show(form, new Size(800, 400)); AppTheme.Apply(form, classicOverride: true);
         var defaultSize = form.Size;
         var workspace = AppTheme.Descendants(form).OfType<ContactWorkspace>().Single();
         var phones = cards.Select(c => c.Phone).ToArray();
@@ -33,7 +33,7 @@ public class ContactResponsiveTests
         var columnCounts = new HashSet<int>();
         foreach (int width in widths.Concat(widths.Reverse()))
         {
-            form.Size = form.LogicalToDeviceUnits(new Size(width, 600));
+            ResponsiveTestWindow.Resize(form, new Size(width, 600));
             form.PerformLayout(); Application.DoEvents();
             Assert.That(workspace.HorizontalScroll.Visible, Is.False, $"Page overflow at {width}");
             columnCounts.Add(cards.GroupBy(c => c.Top).Max(g => g.Count()));
@@ -54,7 +54,7 @@ public class ContactResponsiveTests
             AssertHintFits(hint);
         }
         Assert.That(columnCounts, Is.EquivalentTo(new[] { 1, 2 }));
-        form.Size = form.LogicalToDeviceUnits(new Size(560, 420)); form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.Resize(form, new Size(560, 420)); form.PerformLayout(); Application.DoEvents();
         foreach (var control in cards.SelectMany(c => new Control[] { c.Phone, c.Copy }))
         {
             control.Focus(); Application.DoEvents();
@@ -67,7 +67,7 @@ public class ContactResponsiveTests
         Assert.That(copied.Count, Is.EqualTo(1));
         Assert.That(hint.Text, Does.Contain("Pano şu anda kullanılamıyor")); AssertHintFits(hint);
         Assert.That(phones.Select(p => p.Text), Is.EqualTo(numbers));
-        form.Size = defaultSize; form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.ResizeDevice(form, defaultSize); form.PerformLayout(); Application.DoEvents();
         Assert.That(workspace.VerticalScroll.Visible || workspace.HorizontalScroll.Visible, Is.False);
         Assert.That(workspace.AutoScrollPosition, Is.EqualTo(Point.Empty));
         Assert.That(cards.All(c => workspace.ClientRectangle.Contains(c.Bounds)), Is.True);

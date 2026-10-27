@@ -11,7 +11,7 @@ public class SettingsResponsiveTests
     public void ReflowPreservesUnsavedPathsThemesStatusAndDisabledActions(int theme, int statusCase)
     {
         using var form = new SettingsForm { Session = new("preview-admin", UserRole.Admin), PreviewOnly = true, PersistGridLayout = false, Opacity = 0, ShowInTaskbar = false };
-        form.Show(); AppTheme.Apply(form, classicOverride: theme == 0, darkOverride: theme == 2);
+        ResponsiveTestWindow.Show(form, new Size(1080, 720)); AppTheme.Apply(form, classicOverride: theme == 0, darkOverride: theme == 2);
         var workspace = AppTheme.Descendants(form).OfType<SettingsWorkspace>().Single();
         var cards = workspace.Controls.OfType<SettingsCard>().OrderBy(c => c.TabIndex).ToArray();
         var actions = workspace.Controls.OfType<SettingsActions>().Single();
@@ -32,7 +32,7 @@ public class SettingsResponsiveTests
         bool paired = false, stacked = false, inline = false, labelledAbove = false;
         foreach (int width in widths.Concat(widths.Reverse()))
         {
-            form.Size = form.LogicalToDeviceUnits(new Size(width, 900)); form.PerformLayout(); Application.DoEvents();
+            ResponsiveTestWindow.Resize(form, new Size(width, 900)); form.PerformLayout(); Application.DoEvents();
             Assert.That(workspace.HorizontalScroll.Visible, Is.False, "Page overflow " + width);
             paired |= cards[0].Top == cards[1].Top; stacked |= cards[0].Top < cards[1].Top;
             var panels = cards.Cast<Control>().Append(actions).ToArray();
@@ -57,7 +57,7 @@ public class SettingsResponsiveTests
             Assert.That(AppTheme.Descendants(form), Is.EquivalentTo(originalControls));
         }
         Assert.That(paired && stacked && inline && labelledAbove, Is.True);
-        form.Size = form.LogicalToDeviceUnits(new Size(560, 480)); form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.Resize(form, new Size(560, 480)); form.PerformLayout(); Application.DoEvents();
         foreach (var target in new[] { ("settingsShowBackups", cards[1]), ("settingsShowAppearance", cards[2]), ("settingsShowStatus", cards[3]) })
         {
             AppTheme.Descendants(form).OfType<Button>().Single(c => c.Name == target.Item1).PerformClick(); Application.DoEvents();
@@ -73,10 +73,10 @@ public class SettingsResponsiveTests
         // Status updates must grow AND shrink the same label/card without resetting fields.
         status.Text = Status(2); form.PerformLayout(); Application.DoEvents(); int tall = cards[3].Height;
         status.Text = Status(1); form.PerformLayout(); Application.DoEvents(); Assert.That(cards[3].Height, Is.LessThan(tall));
-        form.Size = new Size(1920, 1080); form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.ResizeDevice(form, new Size(1920, 1080)); form.PerformLayout(); Application.DoEvents();
         Assert.That(workspace.VerticalScroll.Visible || workspace.HorizontalScroll.Visible, Is.False);
         Assert.That(originals.All(p => p.Key.Text == p.Value) && enabled.All(p => p.Key.Enabled == p.Value), Is.True);
-        form.Size = new Size(1096, 804); form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.ResizeDevice(form, new Size(1096, 804)); form.PerformLayout(); Application.DoEvents();
         status.Text = "Hazır"; int sameCardHeight = cards[3].Height;
         status.Text = "Yerel yedek doğrulandı.\nAynalama bekliyor.\nYerel yedek korunuyor.\nSonraki kontrolde yeniden denenecek.";
         Application.DoEvents();

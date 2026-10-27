@@ -11,7 +11,7 @@ public class SummaryResponsiveTests
     {
         using var form = Preview(role);
         Assert.That(form.BackColor, Is.Not.EqualTo(Color.Orange), "The previous orange design must not flash before Show.");
-        form.Show(); AppTheme.Apply(form, classicOverride: true);
+        ResponsiveTestWindow.Show(form, new Size(1120, 650)); AppTheme.Apply(form, classicOverride: true);
         var defaultSize = form.Size;
         using var data = Records(); form.DisplaySummary(data);
         var grid = AppTheme.Descendants(form).OfType<DataGridView>().Single();
@@ -30,7 +30,7 @@ public class SummaryResponsiveTests
         var widths = Enumerable.Range(0, 24).Select(i => 560 + i * 60).Concat(new[] { 800, 1140 }).ToArray();
         foreach (int width in widths.Concat(widths.Reverse()))
         {
-            form.Size = form.LogicalToDeviceUnits(new Size(width, 734));
+            ResponsiveTestWindow.Resize(form, new Size(width, 734));
             form.PerformLayout(); Application.DoEvents();
             Assert.That(workspace.HorizontalScroll.Visible, Is.False, $"Page overflow at {width}");
             countColumns.Add(counts.GroupBy(c => c.Top).Max(g => g.Count()));
@@ -57,7 +57,7 @@ public class SummaryResponsiveTests
         Assert.That(amountColumns, Is.EquivalentTo(new[] { 1, 2 }));
         Assert.That(grid.ReadOnly, Is.True);
         Assert.That(grid.Columns.Cast<DataGridViewColumn>().Where(RecordSelection.IsInternalColumn).All(c => !c.Visible), Is.True);
-        form.Size = form.LogicalToDeviceUnits(new Size(560, 480)); form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.Resize(form, new Size(560, 480)); form.PerformLayout(); Application.DoEvents();
         void Jump(string name) { AppTheme.Descendants(form).OfType<Button>().Single(b => b.Name == name).PerformClick(); Application.DoEvents(); }
         Jump("summaryShowPeople"); Assert.That(counts.All(c => workspace.ClientRectangle.Contains(c.Bounds)), Is.True);
         Jump("summaryShowBalances"); Assert.That(amounts.All(c => workspace.ClientRectangle.Contains(c.Bounds)), Is.True);
@@ -65,7 +65,7 @@ public class SummaryResponsiveTests
         var note = AppTheme.Descendants(leaves).OfType<Label>().Single();
         Assert.That(TextRenderer.MeasureText(note.Text, note.Font, new Size(note.Width, 0), TextFormatFlags.WordBreak).Height, Is.LessThanOrEqualTo(note.Height));
         Assert.That(leaves.ClientRectangle.Contains(grid.Bounds), Is.True);
-        form.Size = defaultSize; form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.ResizeDevice(form, defaultSize); form.PerformLayout(); Application.DoEvents();
         Assert.That(workspace.VerticalScroll.Visible || workspace.HorizontalScroll.Visible, Is.False);
         Assert.That(workspace.AutoScrollPosition, Is.EqualTo(Point.Empty));
         Assert.That(cards.All(c => c.Value.Text == metrics[c.Value.Name]), Is.True);
@@ -76,7 +76,7 @@ public class SummaryResponsiveTests
     [Test]
     public void ExtremeAmountsRemainCompleteAcrossSizesAndThemes()
     {
-        using var form = Preview(UserRole.Admin); form.Show();
+        using var form = Preview(UserRole.Admin); ResponsiveTestWindow.Show(form, new Size(1120, 650));
         foreach (decimal amount in new[] { decimal.MaxValue, decimal.MinValue })
         {
             using var data = Records(); data.Rows.Clear();
@@ -86,7 +86,7 @@ public class SummaryResponsiveTests
             foreach (int width in new[] { 560, 800, 860, 1136, 1920 })
             {
                 AppTheme.Apply(form, darkOverride: theme.Dark, classicOverride: theme.Classic);
-                form.Size = form.LogicalToDeviceUnits(new Size(width, 734)); form.PerformLayout(); Application.DoEvents();
+                ResponsiveTestWindow.Resize(form, new Size(width, 734)); form.PerformLayout(); Application.DoEvents();
                 foreach (var card in AppTheme.Descendants(form).OfType<SummaryMetricCard>().Where(c => c.Value.Name is "TotalBalance" or "AverageBalance"))
                 {
                     Assert.That(card.Value.Text, Is.EqualTo($"{amount:N2} TL"));

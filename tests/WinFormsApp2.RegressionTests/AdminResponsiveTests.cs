@@ -10,7 +10,7 @@ public class AdminResponsiveTests
     public void ReflowKeepsNewAccountInputsMaskedAndOriginalSelectedAccount(int newRoleIndex)
     {
         using var form = new Admin { Session = new("preview-admin", UserRole.Admin), PreviewOnly = true, PersistGridLayout = false, Opacity = 0, ShowInTaskbar = false };
-        form.Show(); AppTheme.Apply(form, classicOverride: true); var defaultSize = form.Size;
+        ResponsiveTestWindow.Show(form, new Size(1120, 650)); AppTheme.Apply(form, classicOverride: true); var defaultSize = form.Size;
         var grid = AppTheme.Descendants(form).OfType<DataGridView>().Single();
         using var data = Accounts(); grid.BindingContext = new BindingContext(); grid.DataSource = data;
         data.DefaultView.Sort = "username DESC"; grid.ClearSelection(); grid.Rows[0].Selected = true;
@@ -28,7 +28,7 @@ public class AdminResponsiveTests
         var widths = Enumerable.Range(0, 24).Select(i => 560 + i * 60).Concat(new[] { 1040, 1136 }).ToArray();
         foreach (int width in widths.Concat(widths.Reverse()))
         {
-            form.Size = form.LogicalToDeviceUnits(new Size(width, 734)); form.PerformLayout(); Application.DoEvents();
+            ResponsiveTestWindow.Resize(form, new Size(width, 734)); form.PerformLayout(); Application.DoEvents();
             Assert.That(workspace.HorizontalScroll.Visible, Is.False, $"Page overflow at {width}");
             columns.Add(create.Controls.Cast<Control>().Where(c => c is TextBox or ComboBox).GroupBy(c => c.Top).Max(g => g.Count()));
             sawPaired |= create.Top == actions.Top; sawStacked |= actions.Top > create.Top;
@@ -61,7 +61,7 @@ public class AdminResponsiveTests
         Assert.That(grid.ReadOnly, Is.True);
         Assert.That(grid.Columns.Cast<DataGridViewColumn>().Where(RecordSelection.IsInternalColumn).All(c => !c.Visible), Is.True);
         Assert.That(grid.Columns.Contains("password") || grid.Columns.Contains("password_hash"), Is.False);
-        form.Size = form.LogicalToDeviceUnits(new Size(560, 480)); form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.Resize(form, new Size(560, 480)); form.PerformLayout(); Application.DoEvents();
         void Jump(string name) { AppTheme.Descendants(form).OfType<Button>().Single(b => b.Name == name).PerformClick(); Application.DoEvents(); }
         Jump("adminShowCreate"); Assert.That(workspace.ClientRectangle.Contains(create.Bounds), Is.True);
         Jump("adminShowActions"); Assert.That(workspace.ClientRectangle.Contains(actions.Bounds), Is.True);
@@ -71,7 +71,7 @@ public class AdminResponsiveTests
             control.Focus(); Application.DoEvents();
             Assert.That(workspace.ClientRectangle.Contains(workspace.RectangleToClient(control.RectangleToScreen(control.ClientRectangle))), Is.True, control.Name);
         }
-        form.Size = defaultSize; form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.ResizeDevice(form, defaultSize); form.PerformLayout(); Application.DoEvents();
         Assert.That(workspace.VerticalScroll.Visible || workspace.HorizontalScroll.Visible, Is.False);
         foreach (bool dark in new[] { false, true })
         {

@@ -14,7 +14,7 @@ public class PasswordResetResponsiveTests
         var user = new UserSession("preview-admin", UserRole.Admin) { SecurityVersion = [0, 0, 0, 0, 0, 0, 0, 1], SecurityEpoch = Guid.NewGuid() };
         var target = new AccountTarget(longName ? LongUsername : "ornek-hedef", [0, 0, 0, 0, 0, 0, 0, 2], Guid.NewGuid());
         using var form = new PasswordResetDialog(user, target) { PreviewOnly = true, PersistGridLayout = false, Opacity = 0, ShowInTaskbar = false };
-        form.Show(); AppTheme.Apply(form, classicOverride: theme == 0, darkOverride: theme == 2);
+        ResponsiveTestWindow.Show(form, new Size(800, 440)); AppTheme.Apply(form, classicOverride: theme == 0, darkOverride: theme == 2);
         var workspace = AppTheme.Descendants(form).OfType<SecretDialogWorkspace>().Single();
         var info = workspace.Controls.OfType<SecretDialogInfoCard>().Single(); var entry = workspace.Controls.OfType<SecretDialogEntryCard>().Single();
         var account = info.Controls.OfType<Label>().Single(c => c.Name.EndsWith("Account"));
@@ -37,7 +37,7 @@ public class PasswordResetResponsiveTests
             var enabled = AppTheme.Descendants(form).Where(c => c is Button or TextBox).ToDictionary(c => c, c => c.Enabled);
             foreach (int width in widths.Concat(widths.Reverse()))
             {
-                form.Size = form.LogicalToDeviceUnits(new Size(width, 740)); form.PerformLayout(); Application.DoEvents();
+                ResponsiveTestWindow.Resize(form, new Size(width, 740)); form.PerformLayout(); Application.DoEvents();
                 AssertLayout(form, workspace, info, entry); paired |= info.Top == entry.Top; stacked |= info.Bottom < entry.Top;
                 Assert.That(account.Text, Is.EqualTo("Hedef hesap: " + target.Username)); Assert.That(account.UseMnemonic, Is.False);
                 Assert.That(field.Text, Is.EqualTo(input)); Assert.That((field.SelectionStart, field.SelectionLength), Is.EqualTo((4, 3)));
@@ -54,7 +54,7 @@ public class PasswordResetResponsiveTests
             }
         }
         Assert.That(paired && stacked, Is.True);
-        form.Size = form.LogicalToDeviceUnits(new Size(560, 420)); form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.Resize(form, new Size(560, 420)); form.PerformLayout(); Application.DoEvents();
         field.Focus(); Application.DoEvents(); AssertFieldVisible(workspace, field); AssertLayout(form, workspace, info, entry);
         Assert.That(form.SelectNextControl(field, true, true, true, true), Is.True); Assert.That(cancel.Focused, Is.True);
         Assert.That(form.SelectNextControl(cancel, true, true, true, true), Is.True); Assert.That(submit.Focused, Is.True);
@@ -72,7 +72,7 @@ public class PasswordResetResponsiveTests
         const string sample = "Only-an-example-temporary-password";
         var result = new PasswordResetResult(LongUsername, sample, new DateTime(2026, 10, 27, 18, 0, 0, DateTimeKind.Utc));
         using var form = new TemporaryPasswordDialog(result) { Opacity = 0, ShowInTaskbar = false };
-        form.Show(); AppTheme.Apply(form, classicOverride: theme == 0, darkOverride: theme == 2);
+        ResponsiveTestWindow.Show(form, new Size(800, 440)); AppTheme.Apply(form, classicOverride: theme == 0, darkOverride: theme == 2);
         var workspace = AppTheme.Descendants(form).OfType<SecretDialogWorkspace>().Single();
         var info = workspace.Controls.OfType<SecretDialogInfoCard>().Single(); var entry = workspace.Controls.OfType<SecretDialogEntryCard>().Single();
         var account = info.Controls.OfType<Label>().Single(c => c.Name.EndsWith("Account"));
@@ -82,7 +82,7 @@ public class PasswordResetResponsiveTests
         var widths = Widths(); bool paired = false, stacked = false;
         foreach (int width in widths.Concat(widths.Reverse()))
         {
-            form.Size = form.LogicalToDeviceUnits(new Size(width, 740)); form.PerformLayout(); Application.DoEvents();
+            ResponsiveTestWindow.Resize(form, new Size(width, 740)); form.PerformLayout(); Application.DoEvents();
             AssertLayout(form, workspace, info, entry); paired |= info.Top == entry.Top; stacked |= info.Bottom < entry.Top;
             Assert.That(account.Text, Is.EqualTo("Hesap: " + LongUsername)); Assert.That(account.UseMnemonic, Is.False);
             Assert.That(detail.Text, Is.EqualTo(description)); Assert.That(description, Does.Contain(result.ExpiresUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")));
@@ -92,7 +92,7 @@ public class PasswordResetResponsiveTests
             Assert.That(AppTheme.Descendants(form), Is.EquivalentTo(controls));
         }
         Assert.That(paired && stacked, Is.True);
-        form.Size = form.LogicalToDeviceUnits(new Size(560, 420)); form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.Resize(form, new Size(560, 420)); form.PerformLayout(); Application.DoEvents();
         field.Focus(); Application.DoEvents(); AssertFieldVisible(workspace, field);
         workspace.ScrollControlIntoView(show); Application.DoEvents(); AssertFieldVisible(workspace, show);
         AssertLayout(form, workspace, info, entry);

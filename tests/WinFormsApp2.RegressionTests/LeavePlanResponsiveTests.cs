@@ -12,7 +12,7 @@ public class LeavePlanResponsiveTests
     public void ReflowPreservesDatesMultiSelectionAndOriginalPersonAndLeaveVersions(UserRole role, int periodCase)
     {
         using var form = new LeavePlanForm { Session = new("preview-user", role), PreviewOnly = true, PersistGridLayout = false, Opacity = 0, ShowInTaskbar = false };
-        form.Show(); AppTheme.Apply(form, classicOverride: true); var defaultSize = form.Size;
+        ResponsiveTestWindow.Show(form, new Size(1120, 680)); AppTheme.Apply(form, classicOverride: true); var defaultSize = form.Size;
         var grid = AppTheme.Descendants(form).OfType<DataGridView>().Single();
         using var data = Records();
         // Current display values must never replace original identity/version snapshots.
@@ -38,7 +38,7 @@ public class LeavePlanResponsiveTests
         var arrangements = new HashSet<string>();
         foreach (int width in widths.Concat(widths.Reverse()))
         {
-            form.Size = form.LogicalToDeviceUnits(new Size(width, 780)); form.PerformLayout(); Application.DoEvents();
+            ResponsiveTestWindow.Resize(form, new Size(width, 780)); form.PerformLayout(); Application.DoEvents();
             Assert.That(workspace.HorizontalScroll.Visible, Is.False, "Page overflow " + width);
             foreach (var panel in new Control[] { editor, records })
             { Assert.That(panel.Left, Is.GreaterThanOrEqualTo(0)); Assert.That(panel.Right, Is.LessThanOrEqualTo(workspace.ClientSize.Width)); }
@@ -58,7 +58,7 @@ public class LeavePlanResponsiveTests
         Assert.That(arrangements, Is.EquivalentTo(new[] { "stacked", "two", "three" }));
         Assert.That(save.Enabled, Is.EqualTo(role != UserRole.Viewer)); Assert.That(grid.MultiSelect && grid.ReadOnly, Is.True);
         Assert.That(grid.Columns.Cast<DataGridViewColumn>().Any(RecordSelection.IsInternalColumn), Is.False);
-        form.Size = form.LogicalToDeviceUnits(new Size(560, 480)); form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.Resize(form, new Size(560, 480)); form.PerformLayout(); Application.DoEvents();
         AppTheme.Descendants(form).OfType<Button>().Single(c => c.Name == "leavePlanShowList").PerformClick(); Application.DoEvents();
         Assert.That(workspace.ClientRectangle.Contains(records.Bounds), Is.True);
         AppTheme.Descendants(form).OfType<Button>().Single(c => c.Name == "leavePlanShowEditor").PerformClick(); Application.DoEvents();
@@ -68,7 +68,7 @@ public class LeavePlanResponsiveTests
             workspace.ScrollControlIntoView(control); Application.DoEvents();
             Assert.That(workspace.ClientRectangle.Contains(workspace.RectangleToClient(control.RectangleToScreen(control.ClientRectangle))), Is.True, control.Name);
         }
-        form.Size = defaultSize; form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.ResizeDevice(form, defaultSize); form.PerformLayout(); Application.DoEvents();
         Assert.That(workspace.HorizontalScroll.Visible || workspace.VerticalScroll.Visible, Is.False);
         foreach (bool dark in new[] { false, true })
         {

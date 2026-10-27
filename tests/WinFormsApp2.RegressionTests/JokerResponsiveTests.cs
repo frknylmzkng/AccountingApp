@@ -14,7 +14,7 @@ public class JokerResponsiveTests
             Session = new("preview-user", role), PreviewOnly = true,
             PersistGridLayout = false, Opacity = 0, ShowInTaskbar = false
         };
-        form.Show(); AppTheme.Apply(form, classicOverride: true);
+        ResponsiveTestWindow.Show(form, new Size(1040, 650)); AppTheme.Apply(form, classicOverride: true);
         var defaultSize = form.Size;
         var grid = AppTheme.Descendants(form).OfType<DataGridView>().Single();
         using var data = Records();
@@ -32,7 +32,7 @@ public class JokerResponsiveTests
         var columnCounts = new HashSet<int>();
         foreach (int width in widths.Concat(widths.Reverse()))
         {
-            form.Size = form.LogicalToDeviceUnits(new Size(width, 734));
+            ResponsiveTestWindow.Resize(form, new Size(width, 734));
             form.PerformLayout(); Application.DoEvents();
             Assert.That(workspace.HorizontalScroll.Visible, Is.False, $"Page overflow at {width}");
             columnCounts.Add(fields.GroupBy(c => c.Top).Max(g => g.Count()));
@@ -61,7 +61,7 @@ public class JokerResponsiveTests
         Assert.That(editor.Controls.OfType<Button>().Where(b => b.Name != "jokerClear").All(b => b.Enabled == (role != UserRole.Viewer)), Is.True);
         Assert.That(AppTheme.Descendants(form).OfType<DateTimePicker>(), Is.Empty);
 
-        form.Size = form.LogicalToDeviceUnits(new Size(560, 480)); form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.Resize(form, new Size(560, 480)); form.PerformLayout(); Application.DoEvents();
         AppTheme.Descendants(form).OfType<Button>().Single(b => b.Name == "jokerShowList").PerformClick();
         Application.DoEvents(); Assert.That(workspace.ClientRectangle.Contains(records.Bounds), Is.True);
         AppTheme.Descendants(form).OfType<Button>().Single(b => b.Name == "jokerShowEditor").PerformClick();
@@ -71,7 +71,7 @@ public class JokerResponsiveTests
             field.Focus(); Application.DoEvents();
             Assert.That(workspace.ClientRectangle.Contains(workspace.RectangleToClient(field.RectangleToScreen(field.ClientRectangle))), Is.True, field.Name);
         }
-        form.Size = defaultSize; form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.ResizeDevice(form, defaultSize); form.PerformLayout(); Application.DoEvents();
         Assert.That(workspace.VerticalScroll.Visible || workspace.HorizontalScroll.Visible, Is.False);
         foreach (bool dark in new[] { false, true })
         {

@@ -13,7 +13,7 @@ public class PasswordChangeResponsiveTests
     {
         var session = new UserSession("preview-user", role) { MustChangePassword = temporary, SecurityVersion = [0, 0, 0, 0, 0, 0, 0, 1], SecurityEpoch = Guid.NewGuid() };
         using var form = new PasswordChangeForm { Session = session, PreviewOnly = true, PersistGridLayout = false, Opacity = 0, ShowInTaskbar = false };
-        form.Show(); AppTheme.Apply(form, classicOverride: true); var defaultSize = form.Size;
+        ResponsiveTestWindow.Show(form, new Size(840, 560)); AppTheme.Apply(form, classicOverride: true); var defaultSize = form.Size;
         var workspace = AppTheme.Descendants(form).OfType<PasswordChangeWorkspace>().Single();
         var editor = workspace.Controls.OfType<PasswordChangeEditor>().Single(); var rules = workspace.Controls.OfType<PasswordChangeRules>().Single();
         var fields = editor.Controls.OfType<TextBox>().OrderBy(c => c.TabIndex).ToArray();
@@ -43,7 +43,7 @@ public class PasswordChangeResponsiveTests
             var enabled = AppTheme.Descendants(form).Where(c => c is Button or TextBox or ToolStrip).ToDictionary(c => c, c => c.Enabled);
             foreach (int width in widths.Concat(widths.Reverse()))
             {
-                form.Size = form.LogicalToDeviceUnits(new Size(width, 740)); form.PerformLayout(); Application.DoEvents();
+                ResponsiveTestWindow.Resize(form, new Size(width, 740)); form.PerformLayout(); Application.DoEvents();
                 Assert.That(workspace.HorizontalScroll.Visible, Is.False, "Page overflow " + width);
                 paired |= editor.Top == rules.Top; stacked |= editor.Bottom < rules.Top;
                 inline |= fields[0].Left > editor.LogicalToDeviceUnits(100); above |= fields[0].Left < editor.LogicalToDeviceUnits(20);
@@ -77,7 +77,7 @@ public class PasswordChangeResponsiveTests
             }
         }
         Assert.That(paired && stacked && inline && above, Is.True);
-        form.Size = form.LogicalToDeviceUnits(new Size(560, 480)); form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.Resize(form, new Size(560, 480)); form.PerformLayout(); Application.DoEvents();
         AppTheme.Descendants(form).OfType<Button>().Single(c => c.Name == "passwordChangeShowRules").PerformClick(); Application.DoEvents();
         Assert.That(workspace.ClientRectangle.Contains(rules.Bounds), Is.True);
         AppTheme.Descendants(form).OfType<Button>().Single(c => c.Name == "passwordChangeShowFields").PerformClick(); Application.DoEvents();
@@ -90,7 +90,7 @@ public class PasswordChangeResponsiveTests
         Assert.That(form.SelectNextControl(fields[0], true, true, true, true), Is.True); Assert.That(fields[1].Focused, Is.True);
         Assert.That(form.SelectNextControl(fields[1], true, true, true, true), Is.True); Assert.That(fields[2].Focused, Is.True);
         Assert.That(form.SelectNextControl(fields[2], true, true, true, true), Is.True); Assert.That(save.Focused, Is.True);
-        form.Size = defaultSize; form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.ResizeDevice(form, defaultSize); form.PerformLayout(); Application.DoEvents();
         Assert.That(workspace.HorizontalScroll.Visible || workspace.VerticalScroll.Visible, Is.False);
         var menu = form.MainMenuStrip!;
         Assert.That(menu.Items.Count, Is.EqualTo(temporary ? 1 : 2));

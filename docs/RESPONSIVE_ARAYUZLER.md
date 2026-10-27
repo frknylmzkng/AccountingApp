@@ -23,6 +23,8 @@ Yeniden boyutlandırma aynı kontrolleri kullanır. Kaydedilmemiş alanlar, sır
 
 ## Doğrulama
 
+CI boyutlandırma düzeltmesinden sonraki yerel tam doğrulama **610 başarılı, 0 başarısız, 0 atlanan test** ile tamamlandı. Uygulama kodu değiştirilmedi; testler artık istenen geniş pencereye gerçekten ulaştığını doğrular. [CI hata nedeni ve düzeltmesi](CI_RESPONSIVE_TESTLER.md).
+
 27 Ekim toplu gönderim öncesinde güncel kaynakla `otomatik_test_master.ps1 -Full` tamamlandı: **609 test başarılı, 0 başarısız, 0 atlanan**. Release derlemesi 0 uyarı / 0 hata. Entegrasyon ve geri yükleme testleri ayrı geçici LocalDB motorunda çalıştı; motor temizlendi. Yerel kanıt: `artifacts/analysis/master-20261027-200150-194/master.trx`.
 
 Son ekran adımında **364 veritabanısız test** başarılıdır. Ekranlar geliştirilirken yayımlanan yerel DLL'ler üzerinde toplam **294 görsel yerleşim kontrolü** yapılmıştır: ilk 10 ekran için 21'er, iki parola akışı için 42'şer kontrol. Her ekranın belgesinde kendi örnek boyutları, roller/temalar, test kapsamı ve yerel kanıt yolu bulunur. Bu sayı farklı geliştirme adımlarındaki kontrollerin toplamıdır.

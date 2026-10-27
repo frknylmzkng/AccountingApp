@@ -13,7 +13,7 @@ public class PaymentsResponsiveTests
     public void ReflowPreservesPaymentJournalSelectionInputsAndStateLocks(UserRole role, int stateIndex)
     {
         using var form = new PaymentsForm { Session = new("preview-user", role), PreviewOnly = true, PersistGridLayout = false, Opacity = 0, ShowInTaskbar = false };
-        form.Show(); AppTheme.Apply(form, classicOverride: true); var defaultSize = form.Size;
+        ResponsiveTestWindow.Show(form, new Size(1180, 780)); AppTheme.Apply(form, classicOverride: true); var defaultSize = form.Size;
         var grids = AppTheme.Descendants(form).OfType<DataGridView>().ToArray();
         var people = grids.Single(g => g.Name == "People"); var ledger = grids.Single(g => g.Name == "Ledger");
         using var persons = People(); using var history = History();
@@ -37,7 +37,7 @@ public class PaymentsResponsiveTests
         bool sawPaired = false, sawStacked = false, sawWideLists = false;
         foreach (int width in widths.Concat(widths.Reverse()))
         {
-            form.Size = form.LogicalToDeviceUnits(new Size(width, 900)); form.PerformLayout(); Application.DoEvents();
+            ResponsiveTestWindow.Resize(form, new Size(width, 900)); form.PerformLayout(); Application.DoEvents();
             Assert.That(workspace.HorizontalScroll.Visible, Is.False, $"Page overflow at {width}");
             sawPaired |= payment.Top == daily.Top; sawStacked |= daily.Top > payment.Top; sawWideLists |= peoplePanel.Top == ledgerPanel.Top;
             var panels = new Control[] { payment, daily, peoplePanel, ledgerPanel };
@@ -62,7 +62,7 @@ public class PaymentsResponsiveTests
         Assert.That(FindButton("paymentAcknowledge").Enabled, Is.EqualTo(edit && state != null && state.Outcome.Status != PaymentStatus.Unconfirmed));
         Assert.That(FindButton("paymentReverse").Enabled, Is.EqualTo(role == UserRole.Admin));
         Assert.That(amount.Enabled, Is.EqualTo(edit && state == null)); Assert.That(people.Enabled, Is.EqualTo(state == null));
-        form.Size = form.LogicalToDeviceUnits(new Size(560, 480)); form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.Resize(form, new Size(560, 480)); form.PerformLayout(); Application.DoEvents();
         foreach (string name in new[] { "paymentsShowClosing", "paymentsShowPeople", "paymentsShowLedger" })
         {
             FindButton(name).PerformClick(); Application.DoEvents();
@@ -77,7 +77,7 @@ public class PaymentsResponsiveTests
         }
         foreach (bool dark in new[] { false, true })
         {
-            form.Size = defaultSize; AppTheme.Apply(form, darkOverride: dark, classicOverride: false); form.PerformLayout(); Application.DoEvents();
+            ResponsiveTestWindow.ResizeDevice(form, defaultSize); AppTheme.Apply(form, darkOverride: dark, classicOverride: false); form.PerformLayout(); Application.DoEvents();
             var label = payment.Controls.OfType<Label>().Single(l => l.Name == "paymentState");
             Assert.That(TextRenderer.MeasureText(label.Text, label.Font, new Size(label.Width, 0), TextFormatFlags.WordBreak).Height, Is.LessThanOrEqualTo(label.Height));
         }

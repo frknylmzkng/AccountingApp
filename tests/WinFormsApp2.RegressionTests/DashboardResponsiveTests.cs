@@ -13,7 +13,7 @@ public class DashboardResponsiveTests
             Session = new("preview-user", role), PreviewOnly = true,
             PersistGridLayout = false, Opacity = 0, ShowInTaskbar = false
         };
-        form.Show(); AppTheme.Apply(form, classicOverride: true);
+        ResponsiveTestWindow.Show(form, new Size(1040, 640)); AppTheme.Apply(form, classicOverride: true);
         var workspace = AppTheme.Descendants(form).OfType<DashboardWorkspace>().Single();
         var cards = workspace.Controls.OfType<DashboardActionCard>().OrderBy(c => c.TabIndex).ToArray();
         Assert.That(cards.Length, Is.EqualTo(8));
@@ -23,7 +23,7 @@ public class DashboardResponsiveTests
         var widths = Enumerable.Range(0, 47).Select(i => 560 + i * 30).ToArray();
         foreach (int width in widths.Concat(widths.Reverse()))
         {
-            form.Size = form.LogicalToDeviceUnits(new Size(width, 600));
+            ResponsiveTestWindow.Resize(form, new Size(width, 600));
             form.PerformLayout(); Application.DoEvents();
             Assert.That(workspace.HorizontalScroll.Visible, Is.False, $"Horizontal overflow at {width}");
             columnCounts.Add(cards.GroupBy(c => c.Top).Max(g => g.Count()));
@@ -48,7 +48,7 @@ public class DashboardResponsiveTests
         Assert.That(workspace.ClientRectangle.Contains(cards.Last().Bounds), Is.True);
         Assert.That(cards.Last().Action.CanSelect, Is.True);
         Assert.That(cards.All(c => c.Action.TabStop), Is.True);
-        form.Size = form.LogicalToDeviceUnits(new Size(1920, 1080));
+        ResponsiveTestWindow.Resize(form, new Size(1920, 1080));
         form.PerformLayout(); Application.DoEvents();
         Assert.That(workspace.HorizontalScroll.Visible || workspace.VerticalScroll.Visible, Is.False);
         Assert.That(workspace.AutoScrollPosition, Is.EqualTo(Point.Empty));

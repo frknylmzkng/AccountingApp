@@ -14,7 +14,7 @@ public class GeneralResponsiveTests
             Session = new("preview-user", role), PreviewOnly = true,
             PersistGridLayout = false, Opacity = 0, ShowInTaskbar = false
         };
-        form.Show(); AppTheme.Apply(form, classicOverride: true);
+        ResponsiveTestWindow.Show(form, new Size(1120, 650)); AppTheme.Apply(form, classicOverride: true);
         var defaultSize = form.Size;
         var grid = AppTheme.Descendants(form).OfType<DataGridView>().Single();
         using var data = Records();
@@ -35,7 +35,7 @@ public class GeneralResponsiveTests
         var fieldColumns = new HashSet<int>();
         foreach (int width in widths.Concat(widths.Reverse()))
         {
-            form.Size = form.LogicalToDeviceUnits(new Size(width, 734));
+            ResponsiveTestWindow.Resize(form, new Size(width, 734));
             form.PerformLayout(); Application.DoEvents();
             Assert.That(workspace.HorizontalScroll.Visible, Is.False, $"Page overflow at {width}");
             sawStacked |= leave.Top > editor.Top; sawPaired |= leave.Top == editor.Top;
@@ -68,7 +68,7 @@ public class GeneralResponsiveTests
         Assert.That(dates.All(d => d.Enabled == (role != UserRole.Viewer)), Is.True);
         Assert.That(grid.Columns.Cast<DataGridViewColumn>().Where(RecordSelection.IsInternalColumn).All(c => !c.Visible), Is.True);
 
-        form.Size = form.LogicalToDeviceUnits(new Size(560, 480)); form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.Resize(form, new Size(560, 480)); form.PerformLayout(); Application.DoEvents();
         AppTheme.Descendants(form).OfType<Button>().Single(b => b.Name == "generalShowList").PerformClick();
         Application.DoEvents(); Assert.That(workspace.ClientRectangle.Contains(records.Bounds), Is.True);
         AppTheme.Descendants(form).OfType<Button>().Single(b => b.Name == "generalShowEditor").PerformClick();
@@ -79,7 +79,7 @@ public class GeneralResponsiveTests
             var bounds = workspace.RectangleToClient(field.RectangleToScreen(field.ClientRectangle));
             Assert.That(workspace.ClientRectangle.Contains(bounds), Is.True, field.Name + " inaccessible by keyboard");
         }
-        form.Size = defaultSize; form.PerformLayout(); Application.DoEvents();
+        ResponsiveTestWindow.ResizeDevice(form, defaultSize); form.PerformLayout(); Application.DoEvents();
         Assert.That(workspace.VerticalScroll.Visible || workspace.HorizontalScroll.Visible, Is.False, "Growing must not keep the old stacked/scrolling layout.");
         foreach (bool dark in new[] { false, true })
         {
