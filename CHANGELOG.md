@@ -2,6 +2,10 @@
 
 Tarihler Türkiye saatine (Europe/Istanbul, UTC+03:00) göredir. Geliştirme günleri aşağıda belirtilir; Git commit tarihi değişikliklerin kaynak geçmişine kaydedildiği tarihtir. Geçmiş tarihlere ayrı commit üretilmedi.
 
+## 28 Ekim 2026
+
+Responsive arayüzleri ve önceki kayıt/sürüm, rapor ve yedek aynalama düzeltmelerini içeren **v1.2.0 Windows x64 paketi** GitHub Releases'te yayımlandı. Paket, `0e58031` commit'inin 610 test başarılı / 0 başarısız Actions çalışmasından alındı; SHA256 özeti aynı kaldı. ZIP ve SHA256SUMS.txt dosyalarına herkese açık erişim doğrulandı. README'deki indirme/sürüm/özet bağlantıları ve paketleme komutları v1.2.0'a güncellendi; güncelleme, ilk kurulum, kısayol ve bütünlük doğrulama adımları açıklandı. [Sürüm notları](https://github.com/frknylmzkng/AccountingApp/releases/tag/v1.2.0).
+
 ## 27 Ekim 2026
 
 GitHub Actions'taki responsive test hataları düzeltildi. İlk çalışmada 42 kontrol, sanal ekranın pencere izleme boyutu sınırı yüzünden geniş düzene ulaşamıyordu. Testlere ortak, gerçek boyutu doğrulayan pencere yardımcısı ve büyük boyuttan küçülme regresyon testi eklendi; uygulama kodu veya test beklentileri gevşetilmedi. Güncel yerel tam paket: **610 başarılı, 0 başarısız, 0 atlanan test**, Release 0 uyarı / 0 hata; geçici LocalDB motoru temizlendi. Kanıt: artifacts/analysis/master-20261027-202455-754/. [Neden ve düzeltme](docs/CI_RESPONSIVE_TESTLER.md).

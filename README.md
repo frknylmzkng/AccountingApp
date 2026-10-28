@@ -6,22 +6,22 @@
 
 Tam doğrulama (26 Ekim 2026): **392 test başarılı, 0 başarısız, 0 atlanan**. Release derlemesi 0 uyarı / 0 hata ile tamamlandı; entegrasyon ve geri yükleme testleri ayrı, geçici LocalDB motorunda çalıştı.
 
-Arayüz güncellemesi (26 Ekim 2026): [Windows 2000 görünümü, yenilenen ekranlar ve görseller](docs/WINDOWS_2000_DENEME.md). Giriş, ana ekran, personel, arama, özet, hesap yönetimi, ödeme, ayarlar, izin ve parola pencereleri düzenlendi. Bu değişikliklerin tamamı aşağıdaki **v1.1.0 Windows paketine** dahildir.
+Arayüz güncellemesi (26 Ekim 2026): [Windows 2000 görünümü, yenilenen ekranlar ve görseller](docs/WINDOWS_2000_DENEME.md). Giriş, ana ekran, personel, arama, özet, hesap yönetimi, ödeme, ayarlar, izin ve parola pencereleri düzenlendi. Bu klasik görünüm **v1.2.0 Windows paketinde** korunur.
 
-Responsive arayüz güncellemesi (27 Ekim 2026): ana ekran ve diğer 11 ekran/akış pencere boyutuna uyarlandı; sütunlar, bölümler, listeler ve işlem düğmeleri kullanılabilir alana göre yerleşir. Girilmiş bilgiler, seçimler ve güvenlik kontrolleri korunur. [Ekranlar, önizlemeler ve deneme adımları](docs/RESPONSIVE_ARAYUZLER.md). Bu güncelleme kaynak kodundadır; aşağıdaki v1.1.0 indirme paketi 26 Ekim arayüzünü içerir. Responsive arayüz için henüz yeni bir GitHub Release paketi yayımlanmadı.
+Responsive arayüz güncellemesi (27 Ekim 2026): ana ekran ve diğer 11 ekran/akış pencere boyutuna uyarlandı; sütunlar, bölümler, listeler ve işlem düğmeleri kullanılabilir alana göre yerleşir. Girilmiş bilgiler, seçimler ve güvenlik kontrolleri korunur. [Ekranlar, önizlemeler ve deneme adımları](docs/RESPONSIVE_ARAYUZLER.md). Bu değişiklikler **28 Ekim 2026'da yayımlanan v1.2.0 Windows paketine** dahildir.
 
 Güncel kaynak doğrulaması (27 Ekim 2026): **610 test başarılı, 0 başarısız, 0 atlanan**; Release derlemesi 0 uyarı / 0 hata. Entegrasyon ve geri yükleme testleri gerçek kullanıcı veritabanından ayrı, testin oluşturduğu geçici LocalDB motorunda tamamlandı; motor temizlendi. [CI ortamındaki ekran boyutu sınırlamasının düzeltmesi](docs/CI_RESPONSIVE_TESTLER.md), geniş yerleşimlerin küçük sanal ekranlarda da gerçekten sınanmasını sağlar.
 
 ## Windows paketini indir ve kur
 
-**[Windows x64 paketini indir (v1.1.0)](https://github.com/frknylmzkng/AccountingApp/releases/download/v1.1.0/AccountingApp-v1.1.0-win-x64.zip)** · [Sürüm notları](https://github.com/frknylmzkng/AccountingApp/releases/tag/v1.1.0) · [SHA256 doğrulama dosyası](https://github.com/frknylmzkng/AccountingApp/releases/download/v1.1.0/SHA256SUMS.txt)
+**[Windows x64 paketini indir (v1.2.0)](https://github.com/frknylmzkng/AccountingApp/releases/download/v1.2.0/AccountingApp-v1.2.0-win-x64.zip)** · [Sürüm notları](https://github.com/frknylmzkng/AccountingApp/releases/tag/v1.2.0) · [SHA256 doğrulama dosyası](https://github.com/frknylmzkng/AccountingApp/releases/download/v1.2.0/SHA256SUMS.txt)
 
 1. Windows 64 bit bilgisayarda SQL Server Express LocalDB'nin kurulu olduğundan emin olun. .NET 10.0.13 çalışma bileşenleri ZIP'e dahildir; ayrıca .NET veya SDK kurmanız gerekmez.
 2. ZIP'in **tamamını yeni bir klasöre** çıkarın; yalnızca EXE dosyasını taşımayın. Güncelleme yapıyorsanız önce açık uygulamayı kapatın.
-3. Veritabanınızı aşağıdaki uygun yöntemle hazırlayın, ardından `WinFormsApp2.exe` dosyasını açıp hesabınızla giriş yapın.
+3. Güncellemede önceki `appsettings.json` dosyanızı yeni klasöre taşıyın; ilk kurulumda aşağıdaki iki komutu çalıştırın. Ardından `WinFormsApp2.exe` dosyasını açıp hesabınızla giriş yapın.
 4. Kısayol kullanıyorsanız hedefini yeni klasördeki `WinFormsApp2.exe` dosyasına yönlendirin; çalışma klasörünü de aynı klasör olarak ayarlayın.
 
-**Mevcut veritabanını kullanıyorsanız:** Önceki `appsettings.json` bağlantı ayarınızı yeni klasöre taşıyın veya mevcut MDF yolunu bu dosyada belirtin. Varsayılan yol `%USERPROFILE%\Documents\Muhasebe2.mdf` dosyasıdır. Mevcut kullanıcı adı ve parolanızla giriş yapabilirsiniz; ilk kurulum komutlarını çalıştırmayın.
+**Mevcut veritabanını kullanıyorsanız:** Önceki `appsettings.json` bağlantı ayarınızı yeni klasöre taşıyın veya mevcut MDF yolunu bu dosyada belirtin. Varsayılan yol `%USERPROFILE%\Documents\Muhasebe2.mdf` dosyasıdır. Mevcut kullanıcı adı ve parolanızla giriş yapabilirsiniz; ilk kurulum komutlarını çalıştırmayın. Giriş hazırlığı, gerekli şema yükseltmelerini (105 izin sürümü dahil) doğrulanmış yedek aldıktan sonra uygular.
 
 **Yalnızca ilk kurulumda:** Paketi çıkardığınız klasörde PowerShell açıp şu komutları çalıştırın:
 
@@ -32,7 +32,9 @@ Copy-Item .\database\appsettings.new-install.example.json .\appsettings.json
 
 Kurulum aracının istediği ilk yönetici kullanıcı adını, parolayı ve parola tekrarını girin. Sabit başlangıç parolası yoktur. Kurulum tamamlanınca `WinFormsApp2.exe` dosyasını açın. Ayrıntılar: [veritabanı kurulumu](database/README.md) ve [kullanım kılavuzu](docs/KULLANIM_VE_TEST.md).
 
-v1.1.0 paketi uygulamayı, `AccountingApp.DatabaseSetup.exe` kurulum aracını, veritabanı betiklerini ve kullanım belgelerini içerir. Gerçek kullanıcı veritabanı pakete dahil değildir. Başlangıçta kurulu Microsoft SqlLocalDB aracı shell kullanmadan çağrılır; bu işlem veritabanını silmez veya yeniden oluşturmaz. LocalDB yerine güvenilir TLS sertifikası yapılandırılmış yerel SQL Express de kullanılabilir.
+v1.2.0 paketi responsive arayüzleri, kayıt seçimi/sürüm korumalarını, güncel ödeme raporlarını ve yedek aynalama tekrar denemesini içerir. Uygulama, `AccountingApp.DatabaseSetup.exe` kurulum aracı, veritabanı betikleri ve kullanım belgeleri birlikte dağıtılır. Gerçek kullanıcı veritabanı pakete dahil değildir. Başlangıçta kurulu Microsoft SqlLocalDB aracı shell kullanmadan çağrılır; bu işlem veritabanını silmez veya yeniden oluşturmaz. LocalDB yerine güvenilir TLS sertifikası yapılandırılmış yerel SQL Express de kullanılabilir.
+
+İndirdiğiniz ZIP'in bütünlüğünü `Get-FileHash .\AccountingApp-v1.2.0-win-x64.zip -Algorithm SHA256` komutuyla kontrol edip sonucu yukarıdaki `SHA256SUMS.txt` dosyasıyla karşılaştırabilirsiniz. Dağıtılan paket, [610 testin geçtiği GitHub Actions çalışmasında](https://github.com/frknylmzkng/AccountingApp/actions/runs/40551422638) üretilmiştir.
 
 Uygulama EXE yanındaki `appsettings.json` dosyasını kullanır. Varsayılan bağlantı, kullanıcının Documents/Muhasebe2.mdf dosyasıdır. Yönetici, Ayarlar ekranından başka JSON profilini doğrulayarak seçebilir; değişiklik yeniden girişte uygulanır. SQL Express örneği `database/appsettings.sqlexpress.example.json` içindedir. İlk kurulum ve mevcut veritabanı yükseltmesi farklı işlemlerdir; `database/README.md` ayrıntıları açıklar.
 
@@ -47,7 +49,7 @@ Yeni özellikler:
 
 PBKDF2-HMAC-SHA256, 600.000 yineleme, rastgele 16 bayt salt ve 32 bayt hash korunur. Eski parolalar kontrollü transaction ile dönüştürülür; bozuk hash açık metne geri düşmez. Kullanıcı listesinde parola veya hash okunmaz. Parola alanları maskelidir. Parola boşlukları korunur; yeni hesaplarda ve parola değişiminde sınır 15–1024 karakterdir. Mevcut kısa parolalar değiştirilmelerine kadar girişte geçerlidir.
 
-Her kullanıcı üst menüdeki **Parolamı değiştir** ile mevcut parolasını doğrulayarak yeni parola belirleyebilir. Yönetici, hesap listesinden başka bir etkin hesabı seçip **Parola sıfırla…** ile kendi parolasını tekrar doğrular. Uygulama 30 dakika geçerli rastgele geçici parola üretir; bu hesap kendi parolasını belirleyene kadar diğer ekranlara erişemez. Parola değişimi ve sıfırlama eski oturumları geçersiz kılar. Ayrıntılar ve deneme adımları: [parola güvenliği kılavuzu](docs/PAROLA_DEGISTIRME_VE_SIFIRLAMA.md). Bu özellikler yukarıdaki v1.1.0 Release paketine dahildir.
+Her kullanıcı üst menüdeki **Parolamı değiştir** ile mevcut parolasını doğrulayarak yeni parola belirleyebilir. Yönetici, hesap listesinden başka bir etkin hesabı seçip **Parola sıfırla…** ile kendi parolasını tekrar doğrular. Uygulama 30 dakika geçerli rastgele geçici parola üretir; bu hesap kendi parolasını belirleyene kadar diğer ekranlara erişemez. Parola değişimi ve sıfırlama eski oturumları geçersiz kılar. Ayrıntılar ve deneme adımları: [parola güvenliği kılavuzu](docs/PAROLA_DEGISTIRME_VE_SIFIRLAMA.md). Bu özellikler yukarıdaki v1.2.0 Release paketine dahildir.
 
 Hatalı giriş sınırı: aynı hesapta 15 dakika içinde 5 yanlış parola, 5 dakikalık geçici kilit oluşturur. Sayaç veritabanında tutulur; yeniden başlatma veya farklı pencereler sınırı aşamaz. Açık oturumlar etkilenmez. Mevcut parolayla yeniden doğrulamalar da aynı bütçeyi kullanır. [Kullanım ve deneme kılavuzu](docs/HATALI_GIRIS_SINIRLAMASI.md).
 
@@ -74,6 +76,6 @@ SDK `global.json` ile 10.0.402 sürümüne sabitlenmiştir. `dotnet.cmd` varsa `
 Paket üretimi:
 
 ```powershell
-.\dotnet.cmd publish WinFormsApp2.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=10.0.13 -p:PublishTrimmed=false -p:RestoreLockedMode=true -p:TreatWarningsAsErrors=true -o artifacts\releases\v1.1.0
-.\dotnet.cmd publish tools\DatabaseSetup\AccountingApp.DatabaseSetup.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=10.0.13 -p:PublishTrimmed=false -p:RestoreLockedMode=true -p:TreatWarningsAsErrors=true -o artifacts\releases\v1.1.0
+.\dotnet.cmd publish WinFormsApp2.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=10.0.13 -p:PublishTrimmed=false -p:RestoreLockedMode=true -p:TreatWarningsAsErrors=true -o artifacts\releases\v1.2.0
+.\dotnet.cmd publish tools\DatabaseSetup\AccountingApp.DatabaseSetup.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=10.0.13 -p:PublishTrimmed=false -p:RestoreLockedMode=true -p:TreatWarningsAsErrors=true -o artifacts\releases\v1.2.0
 ```
