@@ -1,5 +1,7 @@
 # 1.3.33-dev pilot ve teslim kaydı
 
+Yayımlanan **v1.3.33 / şema 138** için güncel adımları ve doldurulabilir kabul tablosunu [gerçek kullanım pilotu ve kabul kılavuzunda](GERCEK_KULLANIM_PILOTU_VE_KABUL_V1_3_33.md) bulabilirsiniz. Bu sayfa geliştirme paketinin tarihsel teslim kaydıdır.
+
 7 Kasım 2026 · Yerel Windows kurulumu · Şema 137 · API 1.32 · .NET 10.0.14
 
 Kullanıcı, kurulu 1.3.33-dev sürümünün düzgün çalıştığını bildirdi. Teslim hazırlığında istemci ve API arşivlerinin dosya özetleri, kurulum kaydındaki kısayol hedefi ve kurulum öncesi yedeğin SHA-256 özeti doğrulandı. Kurulum sırasında 61 tablonun içerik özetleri eşleşmişti. Bu kayıtta pilot senaryoları **bekliyor** durumundadır. [Kurulum kaydı](1_3_33_DEV_KURULUMU.md)

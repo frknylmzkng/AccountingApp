@@ -22,6 +22,10 @@ Paketler imzasızdır. PowerShell’de `Get-FileHash <paket.zip> -Algorithm SHA2
 2. `server.example.json` dosyasından `server.json`, `database-profile.example.json` dosyasından SQL bağlantı profilinizi oluşturun. `AccountingApi:DatabaseProfilePath` alanını bu profile yönlendirin. `ListenUrl`, `AllowedHosts` ve istemcilerin güvendiği HTTPS sertifikasını yapılandırın. Tek bilgisayarda LocalDB için `AllowUserLocalDb` değerini `true` yapın ve aynı Windows hesabıyla `https://localhost:7443` kullanın. Çok bilgisayarlı kurulumda sunucuda SQL Express veya SQL Server kullanın. [Sunucu ve TLS yapılandırması](docs/DAGITIM_SONLANDIRMA_VE_COK_BILGISAYAR.md#topolojiler)
 3. Paket klasöründe `AccountingApp.Server.exe` dosyasını çalıştırın. Sunucu açıldıktan sonra istemci kurulumunda aynı HTTPS adresini girin.
 
+## Gerçek kullanım pilotu ve kabul
+
+Pilot hazırlığı, günlük iş akışı, ayrı ortamda yapılacak denemeler ve doldurulabilir kabul tablosu [v1.3.33 pilot ve kabul kılavuzunda](docs/GERCEK_KULLANIM_PILOTU_VE_KABUL_V1_3_33.md) yer alır.
+
 ## Geliştirme geçmişi
 
 7 Kasım 2026’da 1.3.33-dev yerel teslimi hazırlandı. Daha sonra başarılı Actions çalışmasındaki istemci ve API paketleri şema 138 ile yerel olarak kuruldu. Gerçek kullanım pilotu ve saha kabulü bekliyor. [Pilot ve teslim kaydı](docs/PILOT_VE_TESLIM_1_3_33_DEV.md)
