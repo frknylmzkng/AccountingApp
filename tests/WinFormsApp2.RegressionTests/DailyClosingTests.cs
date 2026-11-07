@@ -60,7 +60,7 @@ public partial class GuideDatabaseTests
         var today = day.AddDays(1);
         await Assert.ThrowsAsync<InvalidOperationException>(() => closings.FinalizeAsync(today, 0m));
         Guid id = await closings.FinalizeAsync(day, 0m);
-        var reader = CreateActor("closing-reader", UserRole.Viewer);
+        var reader = CreateActor("closing-reader", UserRole.Viewer, canViewSalary: true);
         var read = new DailyClosingService(connection, reader);
         Assert.That((await read.ReadAsync(id)).ClosingId, Is.EqualTo(id));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => read.FinalizeAsync(day, 0m));

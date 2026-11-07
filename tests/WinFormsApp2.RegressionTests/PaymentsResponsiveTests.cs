@@ -12,7 +12,7 @@ public class PaymentsResponsiveTests
     [TestCase(UserRole.Viewer, 0), TestCase(UserRole.Viewer, 1), TestCase(UserRole.Viewer, 2), TestCase(UserRole.Viewer, 3), TestCase(UserRole.Viewer, 4)]
     public void ReflowPreservesPaymentJournalSelectionInputsAndStateLocks(UserRole role, int stateIndex)
     {
-        using var form = new PaymentsForm { Session = new("preview-user", role), PreviewOnly = true, PersistGridLayout = false, Opacity = 0, ShowInTaskbar = false };
+        using var form = new PaymentsForm { Session = new UserSession("preview-user", role) { SalaryViewGranted = true, PaymentGranted = role == UserRole.PersonnelManager }, PreviewOnly = true, PersistGridLayout = false, Opacity = 0, ShowInTaskbar = false };
         ResponsiveTestWindow.Show(form, new Size(1180, 780)); AppTheme.Apply(form, classicOverride: true); var defaultSize = form.Size;
         var grids = AppTheme.Descendants(form).OfType<DataGridView>().ToArray();
         var people = grids.Single(g => g.Name == "People"); var ledger = grids.Single(g => g.Name == "Ledger");
@@ -34,6 +34,8 @@ public class PaymentsResponsiveTests
         string originalAmount = amount.Text; var selected = (DataRow)Invoke(form, "SelectedPayment")!;
         var controls = AppTheme.Descendants(form).Where(c => c is Button or TextBox or DateTimePicker or DataGridView or CheckBox).ToDictionary(c => c, c => c.Enabled);
         var widths = Enumerable.Range(0, 24).Select(i => 560 + i * 60).Concat(new[] { 1136, 1800 }).ToArray();
+        var bank = AppTheme.Descendants(form).OfType<Button>().Single(b => b.Name == "paymentsBankMatching");
+        Assert.That(bank.Visible, Is.EqualTo(role == UserRole.Admin));
         bool sawPaired = false, sawStacked = false, sawWideLists = false;
         foreach (int width in widths.Concat(widths.Reverse()))
         {
@@ -43,8 +45,8 @@ public class PaymentsResponsiveTests
             var panels = new Control[] { payment, daily, peoplePanel, ledgerPanel };
             foreach (var panel in panels) { Assert.That(panel.Left, Is.GreaterThanOrEqualTo(0)); Assert.That(panel.Right, Is.LessThanOrEqualTo(workspace.ClientSize.Width)); }
             for (int i = 0; i < panels.Length; i++) for (int j = i + 1; j < panels.Length; j++) Assert.That(panels[i].Bounds.IntersectsWith(panels[j].Bounds), Is.False);
-            foreach (var control in AppTheme.Descendants(form).Where(c => c is TextBox or Button or DateTimePicker or CheckBox or Label))
-                Assert.That(control.Parent!.ClientRectangle.Contains(control.Bounds), Is.True, control.Name);
+            foreach (var control in AppTheme.Descendants(form).Where(c => c.Visible && c is (TextBox or Button or DateTimePicker or CheckBox or Label)))
+                Assert.That(control.Parent!.ClientRectangle.Contains(control.Bounds), Is.True, $"{control.Parent!.Name}/{control.Name}/{control.Text} at {width}");
             foreach (var button in payment.Controls.OfType<Button>())
                 Assert.That(TextRenderer.MeasureText(button.Text, button.Font).Width + form.LogicalToDeviceUnits(12), Is.LessThanOrEqualTo(button.Width), button.Text);
             Assert.That(controls.All(p => p.Key.Enabled == p.Value), Is.True, "Resizing must not unlock a pending payment.");

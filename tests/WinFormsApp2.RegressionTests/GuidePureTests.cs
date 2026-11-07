@@ -250,8 +250,9 @@ public class GuideUiTests
         using (var image = new Bitmap(form.Width, form.Height)) { form.DrawToBitmap(image, new Rectangle(Point.Empty, image.Size)); image.Save(Path.Combine(folder, type.Name + "-classic.png")); }
         Assert.That(form.Controls.OfType<ToolStrip>().Count(s => s is not StatusStrip), Is.EqualTo(1)); Assert.That(form.Controls.OfType<StatusStrip>().Single().Items.Count, Is.EqualTo(3));
         Assert.That(form.Controls.OfType<ToolStrip>().All(c => c.Visible), Is.True);
-        foreach (var field in AppTheme.Descendants(form).OfType<TextBox>())
-        { Assert.That(field.Visible, Is.True); Assert.That(field.Width, Is.GreaterThan(50)); Assert.That(field.Height, Is.GreaterThan(16), field.Name); Assert.That(field.Parent!.ClientRectangle.Contains(field.Bounds), Is.True, field.Name); }
+        // Up/down controls have a native borderless edit child inside the public control.
+        foreach (var field in AppTheme.Descendants(form).OfType<TextBox>().Where(field => field.Parent is not UpDownBase))
+        { Assert.That(field.Visible, Is.True); Assert.That(field.Width, Is.GreaterThan(50)); Assert.That(field.Height, Is.GreaterThanOrEqualTo(field.PreferredHeight), field.Name); Assert.That(field.Parent!.ClientRectangle.Contains(field.Bounds), Is.True, field.Name); }
         if (form is Genel or Joker or Search or Contact or Admin or PaymentsForm or SettingsForm or LeavePlanForm or PasswordChangeForm)
         foreach (var size in form is PaymentsForm or SettingsForm or LeavePlanForm or PasswordChangeForm ? new[] { form.Size, form.MinimumSize, new Size(1920, 1080) } : new[] { form.Size })
         {

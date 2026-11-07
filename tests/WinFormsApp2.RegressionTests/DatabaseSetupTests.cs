@@ -51,12 +51,12 @@ public class DatabaseSetupTests
         Assert.That(new AdminStore(settings.CreateConnectionString()).Authenticate("setup-admin", TestPassword), Is.True);
         var store = new PersonnelStore(settings.CreateConnectionString());
         var person = new PersonnelDetails(11111111111L, "Ada", "Test", "TR470000100100000350930001", 1500.50m);
-        store.Add(PersonnelGroup.General, person, employmentStart: new DateTime(2000, 1, 1));
-        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.izinler"), Is.Zero);
         // Installation baseline remains immutable; the application's additive upgrade supplies versions.
         string upgradeFolder = Path.Combine(Path.GetTempPath(), "AccountingAppTests", "upgrade-" + Guid.NewGuid().ToString("N"));
         try { SchemaUpgrade.Upgrade(settings.CreateConnectionString(), upgradeFolder); }
         finally { if (Directory.Exists(upgradeFolder)) Directory.Delete(upgradeFolder, true); }
+        store.Add(PersonnelGroup.General, person, employmentStart: new DateTime(2000, 1, 1));
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.izinler"), Is.Zero);
         store.SaveLeave(new LeaveTarget(person.Tc, (byte[])Scalar("SELECT RecordVersion FROM dbo.Calisan")!, null), new LeavePeriod(new DateTime(2026, 1, 10), new DateTime(2026, 1, 12)));
         Assert.That(Scalar("SELECT IzinSuresi FROM dbo.izinler"), Is.EqualTo(3));
         store.Update(PersonnelGroup.General, person with { Amount = 2000m }, (byte[])Scalar("SELECT RecordVersion FROM dbo.Calisan")!);

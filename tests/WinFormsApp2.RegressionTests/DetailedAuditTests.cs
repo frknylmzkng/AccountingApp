@@ -7,19 +7,21 @@ namespace WinFormsApp2.RegressionTests;
 public partial class GuideDatabaseTests
 {
     [Test, Category("Audit")]
-    public async Task DetailedAuditRecordsActualOldNewValuesActorAndReasonInSameTransaction()
+    public async Task DetailedAuditRecordsChangedFieldsAndMasksPersonalValuesInSameTransaction()
     {
         using var scope = AuditContext.UseReason("Sentetik kayıt düzeltmesi");
         await Service.SaveAsync(PersonnelGroup.General, Person(), true, employmentStart: new DateTime(2000, 1, 1));
         var version = await VersionAsync();
         await Service.SaveAsync(PersonnelGroup.General, Person() with { FirstName = "Yeni" }, false, expectedVersion: version);
         using var c = new SqlConnection(connection); c.Open();
-        using var cmd = new SqlCommand("SELECT TOP(1) Actor,Reason,OldValues,NewValues,CorrelationId,ActorAccountId,CreatedUtc,RecordKey FROM dbo.AuditLog WHERE EntityType=N'Personnel.General' AND Operation=N'Update' ORDER BY AuditId DESC", c);
+        using var cmd = new SqlCommand("SELECT TOP(1) Actor,Reason,OldValues,NewValues,CorrelationId,ActorAccountId,CreatedUtc,RecordKey,ChangedFields FROM dbo.AuditLog WHERE EntityType=N'Personnel.General' AND Operation=N'Update' ORDER BY AuditId DESC", c);
         using var row = cmd.ExecuteReader(); Assert.That(row.Read(), Is.True);
         Assert.That(row.GetString(0), Is.EqualTo(admin.Username)); Assert.That(row.GetString(1), Is.EqualTo("Sentetik kayıt düzeltmesi"));
         using var before = JsonDocument.Parse(row.GetString(2)); using var after = JsonDocument.Parse(row.GetString(3));
-        Assert.That(before.RootElement.GetProperty("AD").GetString(), Is.EqualTo("Ada"));
-        Assert.That(after.RootElement.GetProperty("AD").GetString(), Is.EqualTo("Yeni"));
+        Assert.That(before.RootElement.GetProperty("AD").GetString(), Is.EqualTo("[MASKELENDİ]"));
+        Assert.That(after.RootElement.GetProperty("AD").GetString(), Is.EqualTo("[MASKELENDİ]"));
+        using var fields = JsonDocument.Parse(row.GetString(8));
+        Assert.That(fields.RootElement.EnumerateArray().Select(field => field.GetString()), Does.Contain("AD"));
         Assert.That(row.GetGuid(4), Is.Not.EqualTo(Guid.Empty)); Assert.That(row.GetGuid(5), Is.Not.EqualTo(Guid.Empty));
         Assert.That(row.GetDateTime(6), Is.GreaterThan(DateTime.UtcNow.AddMinutes(-5)));
         Assert.That(Guid.TryParse(row.GetString(7), out _), Is.True);

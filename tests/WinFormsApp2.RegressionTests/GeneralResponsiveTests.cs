@@ -11,7 +11,7 @@ public class GeneralResponsiveTests
     {
         using var form = new Genel
         {
-            Session = new("preview-user", role), PreviewOnly = true,
+            Session = new UserSession("preview-user", role) { IbanViewGranted = role == UserRole.PersonnelManager }, PreviewOnly = true,
             PersistGridLayout = false, Opacity = 0, ShowInTaskbar = false
         };
         ResponsiveTestWindow.Show(form, new Size(1120, 650)); AppTheme.Apply(form, classicOverride: true);

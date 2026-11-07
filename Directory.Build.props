@@ -6,7 +6,7 @@
     <FileVersion>$(VersionPrefix).0</FileVersion>
     <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
     <SourceTreeState Condition="'$(SourceTreeState)' == ''">unverified</SourceTreeState>
-    <AccountingSchemaVersion>137</AccountingSchemaVersion>
+    <AccountingSchemaVersion>138</AccountingSchemaVersion>
     <AccountingRuntimeVersion>10.0.14</AccountingRuntimeVersion>
     <Deterministic>true</Deterministic>
   </PropertyGroup>

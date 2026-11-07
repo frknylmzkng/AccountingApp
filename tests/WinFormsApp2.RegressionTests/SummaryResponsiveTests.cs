@@ -62,7 +62,7 @@ public class SummaryResponsiveTests
         Jump("summaryShowPeople"); Assert.That(counts.All(c => workspace.ClientRectangle.Contains(c.Bounds)), Is.True);
         Jump("summaryShowBalances"); Assert.That(amounts.All(c => workspace.ClientRectangle.Contains(c.Bounds)), Is.True);
         Jump("summaryShowLeaves"); Assert.That(workspace.ClientRectangle.Contains(leaves.Bounds), Is.True);
-        var note = AppTheme.Descendants(leaves).OfType<Label>().Single();
+        var note = AppTheme.Descendants(leaves).OfType<Label>().Single(l => l.Name == "summaryLeaveNote");
         Assert.That(TextRenderer.MeasureText(note.Text, note.Font, new Size(note.Width, 0), TextFormatFlags.WordBreak).Height, Is.LessThanOrEqualTo(note.Height));
         Assert.That(leaves.ClientRectangle.Contains(grid.Bounds), Is.True);
         ResponsiveTestWindow.ResizeDevice(form, defaultSize); form.PerformLayout(); Application.DoEvents();

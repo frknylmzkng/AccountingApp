@@ -43,7 +43,7 @@ public partial class GuideDatabaseTests
         await Service.SaveAsync(group, Person(), true, employmentStart: new DateTime(2000, 1, 1));
         if (group == PersonnelGroup.General) await Service.SaveLeavesAsync([(await LeaveSelectionAsync(), new(new(2026, 10, 1), new(2026, 10, 3)))]);
         byte[] staleVersion = await VersionAsync(group);
-        var other = new PersonnelService(connection, CreateActor("second-user", UserRole.PersonnelManager, canPay: true));
+        var other = new PersonnelService(connection, CreateActor("second-user", UserRole.PersonnelManager, canPay: true, canViewSalary: true, canViewIban: true));
         if (change == "Payment") await other.PayCurrentAsync(group, Person().Tc, 30m, Guid.NewGuid());
         else await other.SaveAsync(group, change == "Name" ? Person() with { FirstName = "Yeni" } : Person() with { Iban = "TR330006100519786457841326" }, false, expectedVersion: staleVersion);
         byte[] latestVersion = await VersionAsync(group);
@@ -122,7 +122,7 @@ public partial class GuideDatabaseTests
     {
         var group = (PersonnelGroup)groupId;
         await Service.SaveAsync(group, Person(), true, employmentStart: new DateTime(2000, 1, 1)); byte[] version = await VersionAsync(group);
-        var other = new PersonnelService(connection, CreateActor("second-user", UserRole.PersonnelManager, canPay: true));
+        var other = new PersonnelService(connection, CreateActor("second-user", UserRole.PersonnelManager, canPay: true, canViewSalary: true, canViewIban: true));
         static async Task<bool> Try(Task task) { try { await task; return true; } catch (InvalidOperationException) { return false; } }
         bool[] results = await Task.WhenAll(Try(Service.DeleteAsync(group, Person().Tc, version, employmentEnd: new DateTime(2099, 12, 31))), Try(other.SaveAsync(group, Person(amount: 125m), false, expectedVersion: version)));
         Assert.That(results.Count(won => won), Is.EqualTo(1));

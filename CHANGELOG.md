@@ -1,5 +1,11 @@
 # Değişiklik günlüğü
 
+## 2026-11-07 — Yetki, arayüz ve proje SQL regresyonları
+
+Proje ve mali belge eklemeleri kimlikleri tetikleyicilerle uyumlu biçimde döndürür. Şema 138, ücret modülünden sonra proje maliyeti, hakediş ve tahsis hesaplarında kullanılan mali görünümün sütunlarını düzeltir. Ödemeler ekranında banka işlemi dar pencerelerde alt satıra geçer. Giriş ekranı beklenmeyen hata ayrıntılarını göstermez.
+
+Regresyonlar ayrı ücret, IBAN, ödeme ve dışa aktarma yetkilerini, bağımsız proje avansı onayını ve güncel şema üzerinde işlem geri almayı denetler.
+
 ## 2026-11-07 — Şifreli yedekleme regresyonları
 
 Yedekleme ve geri yükleme testleri şifreli `.bak.abk` arşivlerine ve geçici test kasasına geçirildi. Aynalama testleri mevcut farklı içerikli kopyanın korunduğunu ve işlem kaydı yazılamadığında yeniden deneme yapılabildiğini denetler. Saklama temizliği geri yükleme için seçilen şifreli arşivi hem güvenlik yedeği hem de şema yükseltmesi sırasında korur.

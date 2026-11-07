@@ -10,6 +10,8 @@ using Wire = AccountingApp.Contracts;
 
 namespace WinFormsApp2;
 
+internal sealed class RemoteServerIdentityException(string message) : InvalidOperationException(message);
+
 // A token belongs to exactly one authenticated session and one frozen origin.
 // No password/token persistence, redirects, automatic retries or SQL fallback.
 internal sealed class RemoteApi
@@ -35,14 +37,14 @@ internal sealed class RemoteApi
         await CheckAsync(response, ct).ConfigureAwait(false);
         var login = await response.Content.ReadFromJsonAsync<Wire.LoginResponse>(Json, ct).ConfigureAwait(false) ?? throw new InvalidOperationException("Sunucu yanıtı okunamadı.");
         if (!Enum.IsDefined(login.User.Role) || login.User.AccountId == Guid.Empty || login.ServerScope is not { Length: 32 } || login.ServerScope.Any(c => !Uri.IsHexDigit(c)))
-            throw new InvalidOperationException("Sunucu kimliği doğrulanamadı.");
+            throw new RemoteServerIdentityException("Sunucu kimliği doğrulanamadı.");
         var api = new RemoteApi(connection, login.AccessToken, login.User.AccountId, login.ServerScope);
         try
         {
             var prefs = UserPreferences.Load();
             prefs.CentralApiScopes ??= new();
             if (prefs.CentralApiScopes.TryGetValue(connection, out string? known) && known != login.ServerScope)
-                throw new InvalidOperationException("Bu sunucu adresinin veritabanı kimliği değişmiş. Bekleyen ödemeleri ve sunucu profilini yöneticiyle kontrol edin; giriş durduruldu.");
+                throw new RemoteServerIdentityException("Bu sunucu adresinin veritabanı kimliği değişmiş. Bekleyen ödemeleri ve sunucu profilini yöneticiyle kontrol edin; giriş durduruldu.");
             prefs.CentralApiScopes[connection] = login.ServerScope; prefs.Save();
             return api.User(login.User);
         }

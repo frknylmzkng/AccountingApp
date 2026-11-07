@@ -1,6 +1,7 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
 using NUnit.Framework;
+using Wire = AccountingApp.Contracts;
 
 namespace WinFormsApp2.RegressionTests;
 
@@ -14,8 +15,18 @@ public partial class GuideDatabaseTests
         Guid project = await finance.CreateProjectAsync("SITE-01", "Synthetic site");
         await Service.SaveAsync(PersonnelGroup.General, Person(), true, employmentStart: new DateTime(2000, 1, 1));
         Guid person = (Guid)Scalar("SELECT PersonId FROM dbo.Calisan");
-        var advance = await Service.PrepareAdvanceAsync(PersonnelGroup.General, Person().Tc, 150m, await VersionAsync(), project, default);
-        await Service.SubmitPaymentAsync(advance, default);
+        var workforce = new ProjectWorkforceService(connection, admin);
+        await workforce.AssignAsync(new(project, (byte[])Scalar("SELECT RecordVersion FROM dbo.FinanceProjects"), null, null,
+            person, Wire.PersonnelGroup.General, Person().Tc, await VersionAsync(),
+            new DateTime(2000, 1, 1), null, "Sentetik proje ataması"), default);
+        var preparer = new ProjectPaymentService(connection, admin);
+        Guid advanceId = Guid.NewGuid();
+        await preparer.PrepareAsync(new(advanceId, project, person, Wire.PersonnelGroup.General,
+            await VersionAsync(), 150m, Wire.PaymentPurpose.Advance, "Sentetik proje avansı"), default);
+        var approver = new ProjectPaymentService(connection, CreateActor("finance-approver", UserRole.Admin));
+        var decision = new Wire.ProjectPaymentDecide(project, advanceId,
+            (byte[])Scalar("SELECT RecordVersion FROM dbo.ProjectPaymentProposals"), true, "Sentetik avans onayı");
+        await approver.DecideAsync(decision, default);
         Assert.That(Scalar("SELECT PARA FROM dbo.Calisan"), Is.EqualTo(-50m));
         var document = new FinanceDocument(project, "Accrual", "EARN-001", person, PersonnelGroup.General, Person().Tc, await VersionAsync(),
             new DateTime(2026, 10, 1), new DateTime(2026, 10, 31), 200m, "Synthetic accrual");
@@ -23,17 +34,20 @@ public partial class GuideDatabaseTests
         Assert.That(await finance.PostAsync(document), Is.EqualTo(entry));
         Assert.That(Scalar("SELECT PARA FROM dbo.Calisan"), Is.EqualTo(150m));
         await finance.PostAsync(new(project, "Expense", "EXP-001", null, null, null, null, document.Start, document.End, 30m, "Synthetic supplies"));
-        var report = await finance.ProjectsAsync(); var row = report.Rows[0];
+        Assert.That(Scalar("SELECT EffectiveAmount FROM dbo.FinanceEffectiveEntries WHERE Reference=N'EARN-001'"), Is.EqualTo(200m));
+        var report = await finance.ProjectsAsync();
+        var row = report.AsEnumerable().Single(item => item.Field<Guid>("ProjectId") == project);
         Assert.That(row.Field<decimal>("LaborCost"), Is.EqualTo(200m)); Assert.That(row.Field<decimal>("OtherCost"), Is.EqualTo(30m));
         Assert.That(row.Field<decimal>("TotalCost"), Is.EqualTo(230m)); Assert.That(row.Field<decimal>("AdvanceCash"), Is.EqualTo(150m));
-        await Service.SubmitPaymentAsync(advance, default);
+        await approver.DecideAsync(decision, default);
         Assert.That(Scalar("SELECT PARA FROM dbo.Calisan"), Is.EqualTo(150m));
-        await Service.ReversePaymentAsync(advance.RequestId);
+        await Service.ReversePaymentAsync(advanceId);
         Assert.That(Scalar("SELECT PARA FROM dbo.Calisan"), Is.EqualTo(300m));
         var entries = await finance.EntriesAsync(project); var earned = entries.AsEnumerable().Single(r => r.Field<Guid>("EntryId") == entry);
         await finance.ReverseAsync(entry, (byte[])earned["RecordVersion"]);
         Assert.That(Scalar("SELECT PARA FROM dbo.Calisan"), Is.EqualTo(100m));
-        report = await finance.ProjectsAsync(); Assert.That(report.Rows[0].Field<decimal>("TotalCost"), Is.EqualTo(30m));
+        report = await finance.ProjectsAsync();
+        Assert.That(report.AsEnumerable().Single(item => item.Field<Guid>("ProjectId") == project).Field<decimal>("TotalCost"), Is.EqualTo(30m));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.FinanceEntries"), Is.EqualTo(2));
     }
 

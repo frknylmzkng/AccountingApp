@@ -7,7 +7,7 @@ internal sealed partial class PaymentsForm
         Text = "Muhasebe — Ödemeler"; ClientSize = new Size(1180, 780);
         var outer = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1, RowCount = 3 };
         outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
-        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         outer.Controls.Add(ClassicLayouts.Banner("Personel ödemeleri", "Personel ve ödeme seçimini ilgili listeden yapın."), 0, 0);
         pay.Name = "paymentSave"; reverse.Name = "paymentReverse"; receipt.Name = "paymentReceipt";
@@ -23,7 +23,7 @@ internal sealed partial class PaymentsForm
         var peopleList = List(people, "paymentPeopleList", "Personel listesi — ödeme yapılacak kişiyi seçin", 2);
         var ledgerList = List(ledger, "paymentLedgerList", "Hesap defteri — fiş veya iptal için ödeme seçin", 3);
         var workspace = new PaymentsWorkspace(payment, daily, peopleList, ledgerList) { Dock = DockStyle.Fill, Margin = Padding.Empty, TabIndex = 0 };
-        var navigation = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty, TabIndex = 1 };
+        var navigation = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, Margin = Padding.Empty, TabIndex = 1 };
         var targets = new[] { ("paymentsShowEntry", "Ödeme ve fiş", (Control)payment), ("paymentsShowClosing", "Günlük kapanış", daily),
             ("paymentsShowPeople", "Personel listesi", peopleList), ("paymentsShowLedger", "Hesap defteri", ledgerList) };
         foreach (var (name, caption, target) in targets)
@@ -32,10 +32,10 @@ internal sealed partial class PaymentsForm
             button.Click += (_, _) => { if (ReferenceEquals(target, payment)) workspace.AutoScrollPosition = Point.Empty; else workspace.ScrollControlIntoView(target); };
             navigation.Controls.Add(button);
         }
-        var bank=new Button{Text="Banka CSV / ödeme eşleştirme…",AutoSize=true};
+        var bank = new Button { Name = "paymentsBankMatching", Text = "Banka CSV / ödeme eşleştirme…", AutoSize = true, MinimumSize = new Size(0, 28), Margin = new Padding(3, 4, 3, 4) };
         bank.Click+=(_,_)=>{if(IsOperationRunning||!ConfirmDiscardChanges("Banka eşleştirmesini açma"))return;using var d=new BankReconciliationForm(User);d.SessionRevoked+=(_,_)=>NotifySessionRevoked();d.ShowDialog(this);};
         Load+=(_,_)=>bank.Visible=Session?.Role==UserRole.Admin;
-        navigation.Controls.Add(bank);navigation.AutoScroll=true;
+        navigation.Controls.Add(bank);
         outer.Controls.Add(navigation, 0, 1); outer.Controls.Add(workspace, 0, 2); Controls.Add(outer);
         // Visible columns change only presentation; guarded actions retain the full DataRow.
         people.AutoGenerateColumns = false; people.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;

@@ -39,8 +39,8 @@ namespace WinFormsApp2
 
             string message = exception is System.Net.Http.HttpRequestException or TaskCanceledException
                 ? "Merkezi sunucuya ulaşılamadı. HTTPS adresini, sunucunun çalıştığını ve sertifika güvenini kontrol edin. Yerel veritabanına geçilmedi."
-                : exception is InvalidOperationException apiError && UserPreferences.Load().UseCentralApi
-                ? apiError.Message
+                : exception is RemoteServerIdentityException identityError
+                ? identityError.Message
                 : exception is DatabaseConfigurationException configurationError
                 ? configurationError.Message
                 : exception is LocalDbStartupException startupError

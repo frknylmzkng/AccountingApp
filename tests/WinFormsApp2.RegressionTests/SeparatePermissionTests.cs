@@ -10,11 +10,11 @@ public class SeparatePermissionPolicyTests
     [TestCase(UserRole.Admin), TestCase(UserRole.PersonnelManager), TestCase(UserRole.Viewer)]
     public void PaymentAndExportGrantsAreIndependentOfPersonnelEditing(UserRole role)
     {
-        foreach (bool pay in new[] { false, true }) foreach (bool export in new[] { false, true })
+        foreach (bool pay in new[] { false, true }) foreach (bool export in new[] { false, true }) foreach (bool salary in new[] { false, true })
         {
-            var user = new UserSession("sample", role) { PaymentGranted = pay, PersonalDataExportGranted = export };
+            var user = new UserSession("sample", role) { PaymentGranted = pay, PersonalDataExportGranted = export, SalaryViewGranted = salary };
             Assert.That(user.CanEdit, Is.EqualTo(role != UserRole.Viewer));
-            Assert.That(user.CanPay, Is.EqualTo(role == UserRole.Admin || pay));
+            Assert.That(user.CanPay, Is.EqualTo(role == UserRole.Admin || (pay && salary)));
             Assert.That(user.CanExportPersonalData, Is.EqualTo(role == UserRole.Admin || export));
             var temporary = user with { MustChangePassword = true };
             Assert.That(temporary.CanEdit || temporary.CanPay || temporary.CanExportPersonalData, Is.False);
@@ -37,7 +37,7 @@ public partial class GuideDatabaseTests
     [Test, Category("Roles")]
     public async Task PersonnelEditorWithoutPaymentGrantCanEditNamesButNotBalancesOrPay()
     {
-        var actor = CreateActor("personnel-only", UserRole.PersonnelManager); var service = new PersonnelService(connection, actor);
+        var actor = CreateActor("personnel-only", UserRole.PersonnelManager, canViewIban: true, canViewSalary: true); var service = new PersonnelService(connection, actor);
         await Service.SaveAsync(PersonnelGroup.General, Person(), true, employmentStart: new DateTime(2000, 1, 1));
         await service.SaveAsync(PersonnelGroup.General, Person() with { FirstName = "Updated" }, false, expectedVersion: await VersionAsync());
         await Assert.ThrowsAsync<UnauthorizedAccessException>(async () => await service.SaveAsync(PersonnelGroup.General, Person(amount: 1m), false, expectedVersion: await VersionAsync()));
@@ -51,7 +51,7 @@ public partial class GuideDatabaseTests
     [Test, Category("Roles")]
     public async Task PaymentOnlyViewerCanPayWithoutEditingPeopleOrExporting()
     {
-        var actor = CreateActor("payment-only", UserRole.Viewer, canPay: true); var service = new PersonnelService(connection, actor);
+        var actor = CreateActor("payment-only", UserRole.Viewer, canPay: true, canViewSalary: true); var service = new PersonnelService(connection, actor);
         await Service.SaveAsync(PersonnelGroup.General, Person(), true, employmentStart: new DateTime(2000, 1, 1));
         await service.PayCurrentAsync(PersonnelGroup.General, Person().Tc, 30m, Guid.NewGuid());
         Assert.That(Scalar("SELECT PARA FROM dbo.Calisan"), Is.EqualTo(70m));
@@ -64,7 +64,7 @@ public partial class GuideDatabaseTests
     {
         var old = CreateActor("grant-target", UserRole.Viewer); var target = await TargetAsync(old.Username);
         var accounts = new AccountService(connection);
-        await accounts.SetPermissionsAsync(admin, target, true, false);
+        await accounts.SetPermissionsAsync(admin, target, true, false, canViewSalary: true, canViewIban: null);
         Assert.That(await AccountAuthorization.IsCurrentAsync(connection, old, default), Is.False);
         var current = SessionFor(old.Username); Assert.That(current.CanPay, Is.True); Assert.That(current.CanEdit || current.CanExportPersonalData, Is.False);
         await Assert.ThrowsAsync<InvalidOperationException>(() => accounts.SetPermissionsAsync(admin, target, false, true));
@@ -78,7 +78,7 @@ public partial class GuideDatabaseTests
     [Test, Category("Roles")]
     public async Task ExportOnlyViewerCanExportButRevokedAndForgedGrantsCreateNoFile()
     {
-        var actor = CreateActor("export-only", UserRole.Viewer, canExport: true);
+        var actor = CreateActor("export-only", UserRole.Viewer, canExport: true, canViewSalary: true, canViewIban: true);
         using var data = new DataTable(); data.Columns.Add("Ad"); data.Rows.Add("Synthetic");
         string path = Path.Combine(directory, "authorized.csv");
         await new PersonalDataExportService(connection, actor).ExportAsync(data, path, false);
@@ -96,7 +96,7 @@ public partial class GuideDatabaseTests
     {
         var actor = CreateActor("grant-rollback", UserRole.PersonnelManager);
         Execute("CREATE TRIGGER dbo.GuideBlockAudit ON dbo.AuditLog AFTER INSERT AS IF EXISTS(SELECT 1 FROM inserted WHERE Action=N'Account.PermissionsChange') THROW 51099,N'Permission audit rollback',1;");
-        await Assert.ThrowsAsync<SqlException>(async () => await new AccountService(connection).SetPermissionsAsync(admin, await TargetAsync(actor.Username), true, true));
+        await Assert.ThrowsAsync<SqlException>(async () => await new AccountService(connection).SetPermissionsAsync(admin, await TargetAsync(actor.Username), true, true, canViewSalary: true, canViewIban: null));
         Assert.That(await AccountAuthorization.IsCurrentAsync(connection, actor, default), Is.True);
         Assert.That(SessionFor(actor.Username).CanPay || SessionFor(actor.Username).CanExportPersonalData, Is.False);
     }

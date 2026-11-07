@@ -8,7 +8,7 @@ public class PaymentRecoveryTests
 {
     private string directory = "";
     private const string Connection = "Server=(LocalDB)\\RecoveryTests;Database=Recovery;Integrated Security=true";
-    private readonly UserSession user = new("operator", UserRole.PersonnelManager) { PaymentGranted = true };
+    private readonly UserSession user = new("operator", UserRole.PersonnelManager) { PaymentGranted = true, SalaryViewGranted = true };
     private PaymentJournal Journal => new(Connection, directory);
     private static byte[] TestVersion => [1, 2, 3, 4, 5, 6, 7, 8];
     [SetUp] public void Setup() { directory = Path.Combine(TestContext.CurrentContext.WorkDirectory, "Recovery_" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory); }

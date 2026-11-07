@@ -27,7 +27,7 @@ public partial class GuideDatabaseTests
         await FailLogins(admin.Username, 2);
         await SchemaUpgrade.PrepareAsync(connection);
         Assert.That(FailureCount, Is.EqualTo(2));
-        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(38));
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(39));
     }
 
     [Test, Category("LoginThrottle")]

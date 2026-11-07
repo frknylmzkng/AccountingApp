@@ -178,7 +178,7 @@ public partial class GuideDatabaseTests
     {
         await SeedLeavePerson();var previous=admin;RemoveLeaveVersionAndDependentIndexes();
         string folder=Path.Combine(directory,"leave-upgrade");await SchemaUpgrade.PrepareAsync(connection,safetyFolder:folder);await SchemaUpgrade.PrepareAsync(connection,safetyFolder:folder);
-        Assert.That((await LeaveSelectionAsync()).LeaveVersion,Has.Length.EqualTo(8));Assert.That(Scalar("SELECT IZINBASLANGIC FROM dbo.izinler"),Is.EqualTo(Period(1).Start));Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"),Is.EqualTo(38));
+        Assert.That((await LeaveSelectionAsync()).LeaveVersion,Has.Length.EqualTo(8));Assert.That(Scalar("SELECT IZINBASLANGIC FROM dbo.izinler"),Is.EqualTo(Period(1).Start));Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"),Is.EqualTo(39));
         Assert.That(await AccountAuthorization.IsCurrentAsync(connection,previous,default),Is.True);Assert.That(Directory.GetFiles(folder,"*.bak.abk"),Has.Length.EqualTo(1));
     }
     [Test,Category("Migrations")]

@@ -24,7 +24,13 @@ internal sealed class ProjectFinanceService(string connectionString, UserSession
                 if (r.GetString(1) != name) throw new InvalidOperationException("Proje kodu başka adla kayıtlı.");
                 return r.GetGuid(0);
             }
-        using var cmd = work.Command("INSERT dbo.FinanceProjects(Code,Name,CreatedBy) OUTPUT inserted.ProjectId VALUES(@code,@name,@actor)");
+        using var cmd = work.Command("""
+            DECLARE @created TABLE (ProjectId uniqueidentifier);
+            INSERT dbo.FinanceProjects(Code,Name,CreatedBy)
+                OUTPUT inserted.ProjectId INTO @created
+                VALUES(@code,@name,@actor);
+            SELECT ProjectId FROM @created;
+            """);
         cmd.Text("@code", code, 30); cmd.Text("@name", name, 100); cmd.Text("@actor", user.Username);
         Guid id = (Guid)(await cmd.ExecuteScalarAsync(token).ConfigureAwait(false))!;
         await work.CommitAsync(token).ConfigureAwait(false); return id;
@@ -92,8 +98,13 @@ internal sealed class ProjectFinanceService(string connectionString, UserSession
             await EmploymentService.ValidateRangeAsync(work, d.Group.Value, d.PersonId!.Value, d.Start, d.End, token).ConfigureAwait(false);
         }
         await DemandProjectAsync(work, d.ProjectId, token).ConfigureAwait(false);
-        using var cmd = work.Command(@"INSERT dbo.FinanceEntries(ProjectId,Kind,Reference,PersonId,TC,PersonnelGroup,PeriodStart,PeriodEnd,Amount,Description,CreatedBy)
-            OUTPUT inserted.EntryId VALUES(@project,@kind,@reference,@person,@tc,@group,@start,@end,@amount,@description,@actor)");
+        using var cmd = work.Command("""
+            DECLARE @created TABLE (EntryId uniqueidentifier);
+            INSERT dbo.FinanceEntries(ProjectId,Kind,Reference,PersonId,TC,PersonnelGroup,PeriodStart,PeriodEnd,Amount,Description,CreatedBy)
+                OUTPUT inserted.EntryId INTO @created
+                VALUES(@project,@kind,@reference,@person,@tc,@group,@start,@end,@amount,@description,@actor);
+            SELECT EntryId FROM @created;
+            """);
         Key(cmd, d); cmd.Parameters.Add("@person", SqlDbType.UniqueIdentifier).Value = (object?)d.PersonId ?? DBNull.Value;
         cmd.Parameters.Add("@tc", SqlDbType.BigInt).Value = (object?)d.Tc ?? DBNull.Value;
         cmd.Parameters.Add("@group", SqlDbType.Int).Value = d.Group.HasValue ? (int)d.Group.Value : DBNull.Value;

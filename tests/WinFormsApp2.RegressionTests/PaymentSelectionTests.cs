@@ -29,7 +29,7 @@ public class PaymentSelectionTests
     [TestCase(-1), TestCase(0), TestCase(7), TestCase(9)]
     public async Task MissingOrMalformedSelectionVersionStopsBeforeDatabaseAccess(int length)
     {
-        var service = new PersonnelService("invalid connection string", new("operator", UserRole.PersonnelManager) { PaymentGranted = true });
+        var service = new PersonnelService("invalid connection string", new("operator", UserRole.PersonnelManager) { PaymentGranted = true, SalaryViewGranted = true });
         byte[] version = length < 0 ? null! : new byte[length];
         var error = await Assert.ThrowsAsync<InvalidOperationException>(async () => await service.PreparePaymentAsync(PersonnelGroup.General, 11111111111L, 30m, version, default));
         Assert.That(error!.Message, Is.EqualTo(PaymentTarget.SelectionMessage));

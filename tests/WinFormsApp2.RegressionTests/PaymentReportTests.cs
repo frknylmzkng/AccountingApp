@@ -64,7 +64,7 @@ public partial class GuideDatabaseTests
     {
         var id = await SeedReportPayment(); var stale = await Service.LedgerAsync();
         await Service.ReversePaymentAsync(id);
-        var other = new PersonnelService(connection, CreateActor("report-operator", UserRole.PersonnelManager, canPay: true));
+        var other = new PersonnelService(connection, CreateActor("report-operator", UserRole.PersonnelManager, canPay: true, canViewSalary: true));
         await other.PayCurrentAsync(PersonnelGroup.General, Person().Tc, 45m, Guid.NewGuid());
         var report = await Reports.ClosingAsync(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, DailyClosingService.BusinessZone).Date, 50m);
         Assert.That(stale.AsEnumerable().Count(r => r.Field<string>("Kind") == "Payment"), Is.EqualTo(1));
@@ -98,7 +98,7 @@ public partial class GuideDatabaseTests
     [TestCase(UserRole.Viewer), TestCase(UserRole.PersonnelManager), TestCase(UserRole.Admin), Category("Reports")]
     public async Task ReportsHonorExplicitExportGrantAndRevokedSession(UserRole role)
     {
-        var id = await SeedReportPayment(); var actor = CreateActor("report-reader", role, canExport: true); var reports = new PaymentReportService(connection, actor);
+        var id = await SeedReportPayment(); var actor = CreateActor("report-reader", role, canExport: true, canViewSalary: true); var reports = new PaymentReportService(connection, actor);
         Assert.That((await reports.ReceiptAsync(id)).Reference, Is.EqualTo(id.ToString("N")));
         Assert.That((await reports.ClosingAsync(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, DailyClosingService.BusinessZone).Date, 30m)).Difference, Is.Zero);
         Execute("UPDATE dbo.admin SET IsActive=0 WHERE username=N'report-reader'");

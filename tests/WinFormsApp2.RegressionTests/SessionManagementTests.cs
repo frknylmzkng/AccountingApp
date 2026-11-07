@@ -166,7 +166,14 @@ public class SessionManagementTests
         var screens = new Screens(); using var context = new AccountingApplicationContext(screens.Create);
         context.SessionValidator = (_, _) => Task.FromResult(true);
         typeof(AccountingApplicationContext).GetField("backgroundServices", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(context, true);
-        context.StartSession(new UserSession("temporary", UserRole.Admin) { MustChangePassword = true });
+        var settings = typeof(AppDatabase).GetField("settings", BindingFlags.Static | BindingFlags.NonPublic)!;
+        object? previous = settings.GetValue(null);
+        try
+        {
+            settings.SetValue(null, new DatabaseSettings(@"(LocalDB)\UnusedRestrictedSessionTest", "Unused", "", 1));
+            context.StartSession(new UserSession("temporary", UserRole.Admin) { MustChangePassword = true });
+        }
+        finally { settings.SetValue(null, previous); }
         Assert.That(typeof(AccountingApplicationContext).GetField("backupTimer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(context), Is.Null);
         Assert.That(typeof(AccountingApplicationContext).GetField("sessionTimer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(context), Is.Not.Null);
         Assert.That(context.CurrentPage, Is.EqualTo(AppPage.PasswordChange));

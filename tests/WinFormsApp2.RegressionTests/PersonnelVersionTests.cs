@@ -29,7 +29,7 @@ public class PersonnelVersionTests
     [TestCase(9)]
     public async Task MissingOrMalformedVersionIsRejectedBeforeDatabaseAccess(int length)
     {
-        var service = new PersonnelService("invalid connection string", new("operator", UserRole.PersonnelManager));
+        var service = new PersonnelService("invalid connection string", new UserSession("operator", UserRole.PersonnelManager) { IbanViewGranted = true, SalaryViewGranted = true });
         var person = new PersonnelDetails(11111111111L, "Ada", "Test", "TR470000100100000350930001", 100m);
         byte[]? version = length < 0 ? null : new byte[length];
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await service.SaveAsync(PersonnelGroup.General, person, false, expectedVersion: version));
@@ -40,7 +40,7 @@ public class PersonnelVersionTests
     [TestCase(9)]
     public async Task DeleteRequiresAValidVersionBeforeDatabaseAccess(int length)
     {
-        var service = new PersonnelService("invalid connection string", new("operator", UserRole.PersonnelManager));
+        var service = new PersonnelService("invalid connection string", new UserSession("operator", UserRole.PersonnelManager) { IbanViewGranted = true, SalaryViewGranted = true });
         byte[]? version = length < 0 ? null : new byte[length];
         var error = await Assert.ThrowsAsync<InvalidOperationException>(async () => await service.DeleteAsync(PersonnelGroup.General, 11111111111L, version, employmentEnd: new DateTime(2099, 12, 31)));
         Assert.That(error!.Message, Does.Contain("sürüm bilgisi eksik"));

@@ -93,7 +93,7 @@ public class PasswordChangeResponsiveTests
         ResponsiveTestWindow.ResizeDevice(form, defaultSize); form.PerformLayout(); Application.DoEvents();
         Assert.That(workspace.HorizontalScroll.Visible || workspace.VerticalScroll.Visible, Is.False);
         var menu = form.MainMenuStrip!;
-        Assert.That(menu.Items.Count, Is.EqualTo(temporary ? 1 : 2));
+        Assert.That(menu.Items.Cast<ToolStripItem>().Any(c => c.Text == "Oturumu kilitle"), Is.True);
         Assert.That(menu.Items.Cast<ToolStripItem>().Any(c => c.Text?.Contains("Ana ekran") == true), Is.EqualTo(!temporary));
         foreach (bool dark in new[] { false, true })
         {

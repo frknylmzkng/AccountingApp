@@ -10,10 +10,11 @@ public class TransactionTests
     // This fixture creates only its own GUID-named database; it never opens Muhasebe2.mdf.
     private readonly string databaseName = "AccountingAppRegression_" + Guid.NewGuid().ToString("N");
     private static string MasterConnection => TestDatabaseServer.Master;
-    private string connectionString = "";
+    private string connectionString = "", adminConnectionString = "";
+    private const string FixturePassword = "Test-only transaction password";
     private bool databaseCreated;
     private PersonnelStore Store => new PersonnelStore(connectionString);
-    private AdminStore Admins => new AdminStore(connectionString);
+    private AdminStore Admins => new AdminStore(adminConnectionString);
     private static readonly LeavePeriod ValidLeave = new LeavePeriod(new DateTime(2026, 1, 10), new DateTime(2026, 1, 12));
     private static readonly LeavePeriod InvalidLeave = new LeavePeriod(new DateTime(2026, 1, 12), new DateTime(2026, 1, 10));
     private static PersonnelDetails Person(long tc = 11111111111L, decimal amount = 1500.50m) =>
@@ -24,41 +25,29 @@ public class TransactionTests
     {
         string directory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "TestDatabases"));
         Directory.CreateDirectory(directory);
-        string dataFile = Path.Combine(directory, databaseName + ".mdf").Replace("'", "''");
-        string logFile = Path.Combine(directory, databaseName + "_log.ldf").Replace("'", "''");
+        var settings = new DatabaseSettings(TestDatabaseServer.Server, databaseName,
+            Path.Combine(directory, databaseName + ".mdf"), 30);
+        new DatabaseInstaller(settings).Install(() => new("test-admin", FixturePassword));
+        databaseCreated = true;
+        connectionString = settings.CreateConnectionString();
+        SchemaUpgrade.Upgrade(connectionString);
+
+        // Password migration tests use a separate legacy database with no current account constraints.
+        string legacyName = databaseName + "_Legacy";
+        string dataFile = Path.Combine(directory, legacyName + ".mdf").Replace("'", "''");
+        string logFile = Path.Combine(directory, legacyName + "_log.ldf").Replace("'", "''");
         using (var master = new SqlConnection(MasterConnection))
         {
             master.Open();
-            using var create = new SqlCommand($@"
-                CREATE DATABASE [{databaseName}]
-                ON PRIMARY (NAME=N'{databaseName}', FILENAME=N'{dataFile}')
-                LOG ON (NAME=N'{databaseName}_log', FILENAME=N'{logFile}')", master);
+            using var create = new SqlCommand($"""
+                CREATE DATABASE [{legacyName}]
+                ON PRIMARY (NAME=N'{legacyName}', FILENAME=N'{dataFile}')
+                LOG ON (NAME=N'{legacyName}_log', FILENAME=N'{logFile}')
+                """, master);
             create.ExecuteNonQuery();
-            databaseCreated = true;
         }
-        var builder = new SqlConnectionStringBuilder(MasterConnection) { InitialCatalog = databaseName };
-        connectionString = builder.ConnectionString;
-        Execute(@"
-            CREATE TABLE Calisan (TC bigint PRIMARY KEY, AD nvarchar(100) NOT NULL,
-                SOYAD nvarchar(100) NOT NULL, IBAN nvarchar(34) NOT NULL, PARA decimal(18,2) NOT NULL, RecordVersion rowversion NOT NULL);
-            CREATE TABLE Joker (TC bigint PRIMARY KEY, AD nvarchar(100) NOT NULL,
-                SOYAD nvarchar(100) NOT NULL, IBAN nvarchar(34) NOT NULL, PARA decimal(18,2) NOT NULL, RecordVersion rowversion NOT NULL);
-            CREATE TABLE izinler (IzinId int IDENTITY PRIMARY KEY, TC bigint NOT NULL REFERENCES Calisan(TC), LeaveVersion rowversion NOT NULL,
-                IZINBASLANGIC date NOT NULL, IZINBITIS date NOT NULL,
-                IzinSuresi AS DATEDIFF(day, IZINBASLANGIC, IZINBITIS),
-                CONSTRAINT ValidDates CHECK (IZINBITIS >= IZINBASLANGIC));
-            CREATE TABLE admin (username nvarchar(100) PRIMARY KEY, password nvarchar(100) NOT NULL, SessionEpoch uniqueidentifier NOT NULL DEFAULT NEWID());");
-        Execute(@"CREATE TABLE dbo.PaymentLedger(LedgerId bigint IDENTITY PRIMARY KEY,TC bigint NOT NULL,PersonnelGroup int NOT NULL,
-            CreatedUtc datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),Delta decimal(18,2) NOT NULL,Kind nvarchar(20) NOT NULL,
-            Actor nvarchar(50) NOT NULL,RequestId uniqueidentifier NULL,ReversedUtc datetime2 NULL);");
-        using var resource = typeof(PersonnelService).Assembly.GetManifestResourceStream("WinFormsApp2.database.upgrades.106-personnel-identity-archive.sql")!;
-        using var reader = new StreamReader(resource);
-        foreach (string batch in System.Text.RegularExpressions.Regex.Split(reader.ReadToEnd(), @"(?im)^\s*GO\s*$"))
-            if (!string.IsNullOrWhiteSpace(batch)) Execute(batch);
-        using var historyResource = typeof(PersonnelService).Assembly.GetManifestResourceStream("WinFormsApp2.database.upgrades.107-leave-history.sql")!;
-        using var historyReader = new StreamReader(historyResource);
-        foreach (string batch in System.Text.RegularExpressions.Regex.Split(historyReader.ReadToEnd(), @"(?im)^\s*GO\s*$"))
-            if (!string.IsNullOrWhiteSpace(batch)) Execute(batch);
+        adminConnectionString = new SqlConnectionStringBuilder(MasterConnection) { InitialCatalog = legacyName }.ConnectionString;
+        AdminExecute("CREATE TABLE dbo.admin (username nvarchar(100) PRIMARY KEY, password nvarchar(100) NOT NULL, SessionEpoch uniqueidentifier NOT NULL DEFAULT NEWID());");
     }
 
     [SetUp]
@@ -66,10 +55,10 @@ public class TransactionTests
     {
         Execute(@"DROP TRIGGER IF EXISTS BlockEmployeeDelete;
             DROP TRIGGER IF EXISTS BlockLeaveChange;
-            DROP TRIGGER IF EXISTS BlockPasswordMigration;
             DISABLE TRIGGER dbo.ProtectEmploymentLinks ON dbo.EmploymentRecordLinks; DISABLE TRIGGER dbo.ProtectEmployment ON dbo.EmploymentPeriods; DISABLE TRIGGER dbo.GuardLeaveEmployment ON dbo.izinler; DELETE FROM dbo.EmploymentRecordLinks; DISABLE TRIGGER dbo.CaptureLeaveHistory ON dbo.izinler; DISABLE TRIGGER dbo.ProtectLeaveHistory ON dbo.LeaveHistory;
-            DELETE FROM dbo.LeaveHistory; DELETE FROM dbo.PersonnelArchiveEvents; DELETE FROM dbo.PaymentLedger; DELETE FROM izinler; DELETE FROM Calisan; DELETE FROM Joker; DELETE FROM dbo.EmploymentPeriods; DELETE FROM dbo.PersonnelIdentities; DELETE FROM admin;
+            DELETE FROM dbo.LeaveHistory; DELETE FROM dbo.PersonnelArchiveEvents; DELETE FROM dbo.PaymentLedger; DELETE FROM izinler; DELETE FROM Calisan; DELETE FROM Joker; DELETE FROM dbo.EmploymentPeriods; DELETE FROM dbo.PersonnelIdentities;
             ENABLE TRIGGER dbo.ProtectLeaveHistory ON dbo.LeaveHistory; ENABLE TRIGGER dbo.CaptureLeaveHistory ON dbo.izinler; ENABLE TRIGGER dbo.ProtectEmploymentLinks ON dbo.EmploymentRecordLinks; ENABLE TRIGGER dbo.ProtectEmployment ON dbo.EmploymentPeriods; ENABLE TRIGGER dbo.GuardLeaveEmployment ON dbo.izinler;");
+        AdminExecute("DROP TRIGGER IF EXISTS BlockPasswordMigration; DELETE FROM dbo.admin;");
     }
 
     [OneTimeTearDown]
@@ -80,7 +69,12 @@ public class TransactionTests
         master.Open();
         using var drop = new SqlCommand($@"
             ALTER DATABASE [{databaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-            DROP DATABASE [{databaseName}];", master);
+            DROP DATABASE [{databaseName}];
+            IF DB_ID(N'{databaseName}_Legacy') IS NOT NULL
+            BEGIN
+                ALTER DATABASE [{databaseName}_Legacy] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+                DROP DATABASE [{databaseName}_Legacy];
+            END;", master);
         drop.ExecuteNonQuery();
     }
 
@@ -97,7 +91,7 @@ public class TransactionTests
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(culture);
             Assert.That(PersonnelInput.TryCreate("11111111111", "Ada", "Test",
                 "TR470000100100000350930001", input, out var person, out _), Is.True);
-            Store.Add(group, person!, group == PersonnelGroup.General ? ValidLeave : null);
+            Store.Add(group, person!, group == PersonnelGroup.General ? ValidLeave : null, employmentStart: new DateTime(2000, 1, 1));
             string table = group == PersonnelGroup.General ? "Calisan" : "Joker";
             Assert.That(Scalar($"SELECT PARA FROM {table}"), Is.EqualTo(1500.50m));
             Store.Update(group, person! with { Amount = 2500.75m }, (byte[])Scalar($"SELECT RecordVersion FROM {table}")!);
@@ -115,7 +109,7 @@ public class TransactionTests
         decimal amount = decimal.Parse(text, CultureInfo.InvariantCulture);
         PersonnelGroup group = general ? PersonnelGroup.General : PersonnelGroup.Joker;
         string table = general ? "Calisan" : "Joker";
-        Store.Add(group, Person(amount: amount));
+        Store.Add(group, Person(amount: amount), employmentStart: new DateTime(2000, 1, 1));
         Assert.That(Scalar($"SELECT PARA FROM {table}"), Is.EqualTo(amount));
         Store.Update(group, Person(amount: 0m), (byte[])Scalar($"SELECT RecordVersion FROM {table}")!);
         Assert.That(Scalar($"SELECT PARA FROM {table}"), Is.EqualTo(0m));
@@ -281,11 +275,12 @@ public class TransactionTests
     }
 
     [Test]
-    public void JokerDeleteStaysInJokerEvenWithALegacyCrossGroupDuplicate()
+    public void CrossGroupDuplicateCannotRedirectAnArchive()
     {
         Store.Add(PersonnelGroup.General, Person(), ValidLeave, employmentStart: new DateTime(2000, 1, 1));
-        Execute("INSERT INTO Joker(TC,AD,SOYAD,IBAN,PARA) SELECT TC,AD,SOYAD,IBAN,PARA FROM Calisan");
-        Store.Delete(PersonnelGroup.Joker, Person().Tc, (byte[])Scalar("SELECT RecordVersion FROM Joker WHERE TC=11111111111")!, employmentEnd: new DateTime(2099, 12, 31));
+        Assert.Throws<SqlException>(() => Execute("INSERT INTO Joker(TC,AD,SOYAD,IBAN,PARA) SELECT TC,AD,SOYAD,IBAN,PARA FROM Calisan"));
+        byte[] generalVersion = (byte[])Scalar("SELECT RecordVersion FROM Calisan WHERE TC=11111111111")!;
+        Assert.Throws<InvalidOperationException>(() => Store.Delete(PersonnelGroup.Joker, Person().Tc, generalVersion, employmentEnd: new DateTime(2099, 12, 31)));
         Assert.That(Scalar("SELECT COUNT(*) FROM Joker"), Is.EqualTo(0));
         Assert.That(Scalar("SELECT COUNT(*) FROM Calisan"), Is.EqualTo(1));
         Assert.That(Scalar("SELECT COUNT(*) FROM izinler"), Is.EqualTo(1));
@@ -352,8 +347,8 @@ public class TransactionTests
     {
         const string password = "Strong test password 123!";
         Admins.Add("alpha", password);
-        Assert.That(Scalar("SELECT password FROM admin"), Is.EqualTo(""));
-        string hash = (string)Scalar("SELECT password_hash FROM admin")!;
+        Assert.That(AdminScalar("SELECT password FROM admin"), Is.EqualTo(""));
+        string hash = (string)AdminScalar("SELECT password_hash FROM admin")!;
         Assert.That(hash, Is.Not.EqualTo(password));
         Assert.That(PasswordHasher.Verify(password, hash), Is.True);
         Assert.That(Admins.Authenticate("alpha", password), Is.True);
@@ -374,7 +369,7 @@ public class TransactionTests
     {
         Admins.Add("alpha", "secret");
         Admins.Add("beta", "secret");
-        Assert.That(Scalar("SELECT COUNT(DISTINCT password_hash) FROM admin"), Is.EqualTo(2));
+        Assert.That(AdminScalar("SELECT COUNT(DISTINCT password_hash) FROM admin"), Is.EqualTo(2));
     }
 
     [Test]
@@ -384,13 +379,13 @@ public class TransactionTests
         InsertLegacyAccount("alpha", "Legacy password 123");
         InsertLegacyAccount("beta", "Türkçe şifre 456");
         Admins.MigrateLegacyPasswords();
-        Assert.That(Scalar("SELECT COUNT(*) FROM admin WHERE password <> N''"), Is.EqualTo(0));
-        Assert.That(Scalar("SELECT COUNT(*) FROM admin WHERE password_hash IS NOT NULL"), Is.EqualTo(2));
+        Assert.That(AdminScalar("SELECT COUNT(*) FROM admin WHERE password <> N''"), Is.EqualTo(0));
+        Assert.That(AdminScalar("SELECT COUNT(*) FROM admin WHERE password_hash IS NOT NULL"), Is.EqualTo(2));
         Assert.That(Admins.Authenticate("alpha", "Legacy password 123"), Is.True);
         Assert.That(Admins.Authenticate("beta", "Türkçe şifre 456"), Is.True);
-        string first = (string)Scalar("SELECT password_hash FROM admin WHERE username=N'alpha'")!;
+        string first = (string)AdminScalar("SELECT password_hash FROM admin WHERE username=N'alpha'")!;
         Admins.MigrateLegacyPasswords();
-        Assert.That(Scalar("SELECT password_hash FROM admin WHERE username=N'alpha'"), Is.EqualTo(first));
+        Assert.That(AdminScalar("SELECT password_hash FROM admin WHERE username=N'alpha'"), Is.EqualTo(first));
     }
 
     [Test]
@@ -407,7 +402,7 @@ public class TransactionTests
     public void DamagedHashDoesNotFallBackToLegacyPlaintext()
     {
         Admins.Add("alpha", "secret");
-        Execute("UPDATE admin SET password=N'backdoor', password_hash=N'invalid-hash'");
+        AdminExecute("UPDATE admin SET password=N'backdoor', password_hash=N'invalid-hash'");
         Assert.That(Admins.Authenticate("alpha", "secret"), Is.False);
         Assert.That(Admins.Authenticate("alpha", "backdoor"), Is.False);
     }
@@ -416,7 +411,7 @@ public class TransactionTests
     public void ListingWorksWithoutEitherPasswordColumn()
     {
         Admins.Add("alpha", "secret");
-        Execute("ALTER TABLE admin DROP COLUMN password, password_hash;");
+        AdminExecute("ALTER TABLE admin DROP COLUMN password, password_hash;");
         try
         {
             var users = Admins.GetUsers();
@@ -426,7 +421,7 @@ public class TransactionTests
         }
         finally
         {
-            Execute(@"ALTER TABLE admin ADD password nvarchar(100) NOT NULL DEFAULT N'',
+            AdminExecute(@"ALTER TABLE admin ADD password nvarchar(100) NOT NULL DEFAULT N'',
                 password_hash nvarchar(256) NULL;");
         }
     }
@@ -437,13 +432,13 @@ public class TransactionTests
         UseLegacyPasswordSchema();
         InsertLegacyAccount("alpha", "first secret");
         InsertLegacyAccount("beta", "second secret");
-        Execute(@"CREATE TRIGGER BlockPasswordMigration ON admin AFTER UPDATE AS
+        AdminExecute(@"CREATE TRIGGER BlockPasswordMigration ON admin AFTER UPDATE AS
             BEGIN; IF EXISTS(SELECT 1 FROM inserted WHERE username=N'beta')
                 THROW 51002, 'Deliberate credential migration failure', 1; END;");
         Assert.Throws<SqlException>(() => Admins.MigrateLegacyPasswords());
-        Assert.That(Scalar("SELECT password FROM admin WHERE username=N'alpha'"), Is.EqualTo("first secret"));
-        Assert.That(Scalar("SELECT password FROM admin WHERE username=N'beta'"), Is.EqualTo("second secret"));
-        Assert.That(Scalar("SELECT COL_LENGTH(N'dbo.admin',N'password_hash')"), Is.EqualTo(DBNull.Value));
+        Assert.That(AdminScalar("SELECT password FROM admin WHERE username=N'alpha'"), Is.EqualTo("first secret"));
+        Assert.That(AdminScalar("SELECT password FROM admin WHERE username=N'beta'"), Is.EqualTo("second secret"));
+        Assert.That(AdminScalar("SELECT COL_LENGTH(N'dbo.admin',N'password_hash')"), Is.EqualTo(DBNull.Value));
     }
 
     [Test]
@@ -453,7 +448,7 @@ public class TransactionTests
         InsertLegacyAccount("alpha", "legacy secret");
         await Task.WhenAll(Task.Run(() => Admins.MigrateLegacyPasswords()),
             Task.Run(() => Admins.MigrateLegacyPasswords()));
-        Assert.That(Scalar("SELECT password FROM admin"), Is.EqualTo(""));
+        Assert.That(AdminScalar("SELECT password FROM admin"), Is.EqualTo(""));
         Assert.That(Admins.Authenticate("alpha", "legacy secret"), Is.True);
     }
 
@@ -468,13 +463,13 @@ public class TransactionTests
         Assert.That(Admins.Authenticate(username, "secret"), Is.True);
     }
 
-    private void UseLegacyPasswordSchema() => Execute(@"
+    private void UseLegacyPasswordSchema() => AdminExecute(@"
         IF COL_LENGTH(N'dbo.admin',N'password_hash') IS NOT NULL
             ALTER TABLE dbo.admin DROP COLUMN password_hash;");
 
     private void InsertLegacyAccount(string username, string password)
     {
-        using var connection = new SqlConnection(connectionString);
+        using var connection = new SqlConnection(adminConnectionString);
         connection.Open();
         using var command = new SqlCommand("INSERT INTO admin (username,password) VALUES (@username,@password)", connection);
         command.Parameters.AddWithValue("@username", username);
@@ -491,14 +486,18 @@ public class TransactionTests
 
     [TestCase(true)]
     [TestCase(false)]
-    public void LegacyStoreDeleteAlsoRejectsARecreatedRecord(bool general)
+    public async Task LegacyStoreDeleteRejectsAReactivatedRecord(bool general)
     {
         var group = general ? PersonnelGroup.General : PersonnelGroup.Joker;
         string table = general ? "Calisan" : "Joker";
-        Store.Add(group, Person(), general ? ValidLeave : null);
+        Store.Add(group, Person(), general ? ValidLeave : null, employmentStart: new DateTime(2000, 1, 1));
         byte[] version = (byte[])Scalar($"SELECT RecordVersion FROM {table}")!;
         Store.Delete(group, Person().Tc, version, employmentEnd: new DateTime(2099, 12, 31));
-        Store.Add(group, Person() with { FirstName = "Replacement" }, general ? ValidLeave : null);
+        var admin = await new AccountService(connectionString).AuthenticateAsync("test-admin", FixturePassword);
+        var service = new PersonnelService(connectionString, admin!);
+        var archived = (await service.ListAsync(group, includeArchived: true)).Rows[0];
+        await service.RestoreArchivedAsync(group, (Guid)archived["PersonId"], (byte[])archived[PersonnelConcurrency.ColumnName]);
+        Store.Update(group, Person() with { FirstName = "Replacement" }, (byte[])Scalar($"SELECT RecordVersion FROM {table}")!);
         var error = Assert.Throws<InvalidOperationException>(() => Store.Delete(group, Person().Tc, version, employmentEnd: new DateTime(2099, 12, 31)));
         Assert.That(error!.Message, Is.EqualTo(PersonnelConcurrency.ConflictMessage));
         Assert.That(Scalar($"SELECT AD FROM {table}"), Is.EqualTo("Replacement"));
@@ -509,17 +508,20 @@ public class TransactionTests
         Scalar($"SELECT RecordVersion FROM Calisan WHERE TC={tc}") as byte[] ?? new byte[8],
         Scalar($"SELECT LeaveVersion FROM izinler WHERE TC={tc}") as byte[]);
 
-    private void Execute(string sql)
+    private void AdminExecute(string sql) => Execute(sql, adminConnectionString);
+    private object? AdminScalar(string sql) => Scalar(sql, adminConnectionString);
+
+    private void Execute(string sql, string? target = null)
     {
-        using var connection = new SqlConnection(connectionString);
+        using var connection = new SqlConnection(target ?? connectionString);
         connection.Open();
         using var command = new SqlCommand(sql, connection);
         command.ExecuteNonQuery();
     }
 
-    private object? Scalar(string sql)
+    private object? Scalar(string sql, string? target = null)
     {
-        using var connection = new SqlConnection(connectionString);
+        using var connection = new SqlConnection(target ?? connectionString);
         connection.Open();
         using var command = new SqlCommand(sql, connection);
         return command.ExecuteScalar();

@@ -26,6 +26,7 @@ internal static class AppTheme
         root.BackColor = background; root.ForeColor = foreground;
         foreach (var c in Descendants(root))
         {
+            if (c is TextBox && c.Parent is UpDownBase) continue;
             c.Font = c.Font.Size >= 12 ? ModernHeading : ModernFont;
             if (Equals(c.Tag, TitleTag)) { c.BackColor = Color.FromArgb(25, 46, 80); c.ForeColor = Color.White; continue; }
             c.ForeColor = foreground;
@@ -49,7 +50,7 @@ internal static class AppTheme
                 grid.DataBindingComplete -= FormatGrid; grid.DataBindingComplete += FormatGrid;
             }
             else if (c is ToolStrip strip) { StyleStrip(strip, background, foreground, ModernFont); }
-            else c.BackColor = c is ComboBox or DateTimePicker ? surface : background;
+            else c.BackColor = c is ComboBox or DateTimePicker or UpDownBase ? surface : background;
         }
         root.Invalidate(true);
     }
@@ -59,6 +60,7 @@ internal static class AppTheme
         root.BackColor = face; root.ForeColor = Color.Black;
         foreach (var c in Descendants(root))
         {
+            if (c is TextBox && c.Parent is UpDownBase) continue;
             c.Font = c.Font.Size >= 12 ? ClassicHeading : ClassicFont;
             c.ForeColor = Color.Black;
             if (Equals(c.Tag, TitleTag)) { c.BackColor = selection; c.ForeColor = Color.White; continue; }
@@ -71,6 +73,7 @@ internal static class AppTheme
             }
             else if (c is Button button) { button.FlatStyle = FlatStyle.Standard; button.UseVisualStyleBackColor = false; }
             else if (c is ComboBox combo) { combo.FlatStyle = FlatStyle.Standard; combo.BackColor = Color.White; }
+            else if (c is UpDownBase) c.BackColor = Color.White;
             else if (c is TreeView tree) { tree.BackColor = Color.White; tree.BorderStyle = BorderStyle.Fixed3D; tree.HideSelection = false; }
             else if (c is DataGridView grid)
             {

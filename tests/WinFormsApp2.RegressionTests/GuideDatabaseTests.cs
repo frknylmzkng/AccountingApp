@@ -26,9 +26,17 @@ public partial class GuideDatabaseTests
     [SetUp]
     public void Reset()
     {
-        // Fixture-only cleanup of this GUID database; normal application paths
-        // never disable the append-only history guards.
-        Execute("DROP TRIGGER IF EXISTS dbo.GuideBlockAudit; DISABLE TRIGGER dbo.ProtectDailyClosings ON dbo.DailyClosings; DELETE FROM dbo.DailyClosings; ENABLE TRIGGER dbo.ProtectDailyClosings ON dbo.DailyClosings; DISABLE TRIGGER dbo.ProtectAuditLog ON dbo.AuditLog; DISABLE TRIGGER dbo.ProtectEmploymentLinks ON dbo.EmploymentRecordLinks; DISABLE TRIGGER dbo.ProtectEmployment ON dbo.EmploymentPeriods; DISABLE TRIGGER dbo.GuardLeaveEmployment ON dbo.izinler; DELETE FROM dbo.EmploymentRecordLinks; DISABLE TRIGGER dbo.CaptureLeaveHistory ON dbo.izinler; DISABLE TRIGGER dbo.ProtectLeaveHistory ON dbo.LeaveHistory; DELETE FROM dbo.LeaveHistory; DELETE FROM dbo.PersonnelArchiveEvents; DELETE FROM dbo.LoginThrottle; DELETE FROM dbo.PaymentLedger; DISABLE TRIGGER dbo.ProtectFinanceEntries ON dbo.FinanceEntries; DELETE FROM dbo.FinanceEntries; DELETE FROM dbo.FinanceProjects; ENABLE TRIGGER dbo.ProtectFinanceEntries ON dbo.FinanceEntries; DELETE FROM dbo.AuditLog; DELETE FROM dbo.izinler; DELETE FROM dbo.Calisan; DELETE FROM dbo.Joker; DELETE FROM dbo.EmploymentPeriods; DELETE FROM dbo.PersonnelIdentities; DELETE FROM dbo.admin; DELETE FROM dbo.AuditLog; ENABLE TRIGGER dbo.ProtectAuditLog ON dbo.AuditLog; ENABLE TRIGGER dbo.ProtectLeaveHistory ON dbo.LeaveHistory; ENABLE TRIGGER dbo.CaptureLeaveHistory ON dbo.izinler; ENABLE TRIGGER dbo.ProtectEmploymentLinks ON dbo.EmploymentRecordLinks; ENABLE TRIGGER dbo.ProtectEmployment ON dbo.EmploymentPeriods; ENABLE TRIGGER dbo.GuardLeaveEmployment ON dbo.izinler;");
+        // Fixture-only cleanup of this GUID database.
+        Execute("""
+            DROP TRIGGER IF EXISTS dbo.GuideBlockAudit;
+            DISABLE TRIGGER dbo.ProtectProjectPaymentProposals ON dbo.ProjectPaymentProposals;
+            DELETE FROM dbo.ProjectPaymentProposals;
+            ENABLE TRIGGER dbo.ProtectProjectPaymentProposals ON dbo.ProjectPaymentProposals;
+            DISABLE TRIGGER dbo.ProtectProjectAssignments ON dbo.PersonnelProjectAssignments;
+            DELETE FROM dbo.PersonnelProjectAssignments;
+            ENABLE TRIGGER dbo.ProtectProjectAssignments ON dbo.PersonnelProjectAssignments;
+            """);
+        Execute("DISABLE TRIGGER dbo.ProtectDailyClosings ON dbo.DailyClosings; DELETE FROM dbo.DailyClosings; ENABLE TRIGGER dbo.ProtectDailyClosings ON dbo.DailyClosings; DISABLE TRIGGER dbo.ProtectAuditLog ON dbo.AuditLog; DISABLE TRIGGER dbo.ProtectEmploymentLinks ON dbo.EmploymentRecordLinks; DISABLE TRIGGER dbo.ProtectEmployment ON dbo.EmploymentPeriods; DISABLE TRIGGER dbo.GuardLeaveEmployment ON dbo.izinler; DELETE FROM dbo.EmploymentRecordLinks; DISABLE TRIGGER dbo.CaptureLeaveHistory ON dbo.izinler; DISABLE TRIGGER dbo.ProtectLeaveHistory ON dbo.LeaveHistory; DELETE FROM dbo.LeaveHistory; DELETE FROM dbo.PersonnelArchiveEvents; DELETE FROM dbo.LoginThrottle; DELETE FROM dbo.PaymentLedger; DISABLE TRIGGER dbo.ProtectFinanceEntries ON dbo.FinanceEntries; DELETE FROM dbo.FinanceEntries; DISABLE TRIGGER dbo.ProtectProjectDelete ON dbo.FinanceProjects; DELETE FROM dbo.FinanceProjects; ENABLE TRIGGER dbo.ProtectProjectDelete ON dbo.FinanceProjects; ENABLE TRIGGER dbo.ProtectFinanceEntries ON dbo.FinanceEntries; DELETE FROM dbo.AuditLog; DELETE FROM dbo.izinler; DELETE FROM dbo.Calisan; DELETE FROM dbo.Joker; DELETE FROM dbo.EmploymentPeriods; DELETE FROM dbo.PersonnelIdentities; DELETE FROM dbo.admin; DELETE FROM dbo.AuditLog; ENABLE TRIGGER dbo.ProtectAuditLog ON dbo.AuditLog; ENABLE TRIGGER dbo.ProtectLeaveHistory ON dbo.LeaveHistory; ENABLE TRIGGER dbo.CaptureLeaveHistory ON dbo.izinler; ENABLE TRIGGER dbo.ProtectEmploymentLinks ON dbo.EmploymentRecordLinks; ENABLE TRIGGER dbo.ProtectEmployment ON dbo.EmploymentPeriods; ENABLE TRIGGER dbo.GuardLeaveEmployment ON dbo.izinler;");
         using var c = new SqlConnection(connection); c.Open(); using var cmd = new SqlCommand("INSERT INTO dbo.admin(username,password,password_hash,RoleName) VALUES(N'test-admin',N'',@hash,N'Admin')", c); cmd.Text("@hash", hash, 256); cmd.ExecuteNonQuery();
         admin = SessionFor("test-admin");
     }
@@ -44,15 +52,17 @@ public partial class GuideDatabaseTests
     private UserSession SessionFor(string username)
     {
         using var c = new SqlConnection(connection); c.Open();
-        using var cmd = new SqlCommand("SELECT username,RoleName,SessionVersion,SessionEpoch,MustChangePassword,CanPay,CanExportPersonalData FROM dbo.admin WHERE username=@name", c); cmd.Text("@name", username);
+        using var cmd = new SqlCommand("SELECT username,RoleName,SessionVersion,SessionEpoch,MustChangePassword,CanPay,CanExportPersonalData,CanViewSalary,CanViewIban FROM dbo.admin WHERE username=@name", c); cmd.Text("@name", username);
         using var reader = cmd.ExecuteReader(); Assert.That(reader.Read(), Is.True);
-        return new(reader.GetString(0), Enum.Parse<UserRole>(reader.GetString(1))) { SecurityVersion = reader.GetFieldValue<byte[]>(2).ToArray(), SecurityEpoch = reader.GetGuid(3), MustChangePassword = reader.GetBoolean(4), PaymentGranted = reader.GetBoolean(5), PersonalDataExportGranted = reader.GetBoolean(6) };
+        return new(reader.GetString(0), Enum.Parse<UserRole>(reader.GetString(1))) { SecurityVersion = reader.GetFieldValue<byte[]>(2).ToArray(), SecurityEpoch = reader.GetGuid(3), MustChangePassword = reader.GetBoolean(4), PaymentGranted = reader.GetBoolean(5), PersonalDataExportGranted = reader.GetBoolean(6), SalaryViewGranted = reader.GetBoolean(7), IbanViewGranted = reader.GetBoolean(8) };
     }
-    private UserSession CreateActor(string username, UserRole role, bool canPay = false, bool canExport = false)
+    private UserSession CreateActor(string username, UserRole role, bool canPay = false, bool canExport = false, bool canViewSalary = false, bool canViewIban = false)
     {
         using var c = new SqlConnection(connection); c.Open();
-        using var cmd = new SqlCommand("INSERT INTO dbo.admin(username,password,password_hash,RoleName,CanPay,CanExportPersonalData) VALUES(@name,N'',@hash,@role,@pay,@export)", c);
+        using var cmd = new SqlCommand("INSERT INTO dbo.admin(username,password,password_hash,RoleName,CanPay,CanExportPersonalData,CanViewSalary,CanViewIban) VALUES(@name,N'',@hash,@role,@pay,@export,@salary,@iban)", c);
         cmd.Parameters.Add("@pay", System.Data.SqlDbType.Bit).Value = canPay; cmd.Parameters.Add("@export", System.Data.SqlDbType.Bit).Value = canExport;
+        cmd.Parameters.Add("@salary", SqlDbType.Bit).Value = canViewSalary;
+        cmd.Parameters.Add("@iban", SqlDbType.Bit).Value = canViewIban;
         cmd.Text("@name", username); cmd.Text("@hash", hash, 256); cmd.Text("@role", role.ToString(), 24); cmd.ExecuteNonQuery();
         return SessionFor(username);
     }
@@ -85,7 +95,7 @@ public partial class GuideDatabaseTests
     public async Task StartupUpgradeIsRepeatableAndPreservesExistingRows()
     {
         await Service.SaveAsync(PersonnelGroup.General, Person(), true, employmentStart: new DateTime(2000, 1, 1)); await SchemaUpgrade.PrepareAsync(connection); await SchemaUpgrade.PrepareAsync(connection);
-        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(38)); Assert.That(Scalar("SELECT COUNT(*) FROM dbo.Calisan"), Is.EqualTo(1));
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(39)); Assert.That(Scalar("SELECT COUNT(*) FROM dbo.Calisan"), Is.EqualTo(1));
     }
     [Test, Category("Migrations")]
     public async Task UnversionedLegacyDatabaseUpgradesWithoutFalseBaselineOrDataLoss()
@@ -132,7 +142,7 @@ public partial class GuideDatabaseTests
         Assert.That(await accounts.AuthenticateAsync("viewer", "incorrect"), Is.Null);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(async () => await new PersonnelService(connection, user!).SaveAsync(PersonnelGroup.General, Person(), true, employmentStart: new DateTime(2000, 1, 1)));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(async () => await accounts.ListAsync(user!, default));
-        var table = await accounts.ListAsync(admin, default); Assert.That(table.Columns.Cast<DataColumn>().Where(c => !RecordSelection.IsInternalColumnName(c.ColumnName)).Select(c => c.ColumnName), Is.EquivalentTo(new[] { "username", "RoleName", "IsActive", "MustChangePassword", "PasswordResetExpiresUtc" }));
+        var table = await accounts.ListAsync(admin, default); Assert.That(table.Columns.Cast<DataColumn>().Where(c => !RecordSelection.IsInternalColumnName(c.ColumnName)).Select(c => c.ColumnName), Is.EquivalentTo(new[] { "username", "RoleName", "IsActive", "MustChangePassword", "PasswordResetExpiresUtc", "CanPay", "CanExportPersonalData", "CanViewSalary", "CanViewIban" }));
     }
     [Test, Category("Roles")]
     public async Task LastAdminCannotBeDeletedEvenWhenViewerExists()
@@ -144,7 +154,7 @@ public partial class GuideDatabaseTests
     [Test, Category("Roles")]
     public async Task DeactivatedAccountCannotLoginOrUseAnyCachedPersonnelPermission()
     {
-        var actor = CreateActor("operator", UserRole.PersonnelManager, canPay: true);
+        var actor = CreateActor("operator", UserRole.PersonnelManager, canPay: true, canViewSalary: true, canViewIban: true);
         var accounts = new AccountService(connection);
         await Service.SaveAsync(PersonnelGroup.General, Person(), true, employmentStart: new DateTime(2000, 1, 1)); byte[] personVersion = await VersionAsync();
         await accounts.SetActiveAsync(admin, await TargetAsync(actor.Username), false, default);
@@ -167,7 +177,7 @@ public partial class GuideDatabaseTests
     [Test, Category("Roles")]
     public async Task ReactivationRequiresNewLoginAndDoesNotReviveOldSession()
     {
-        var actor = CreateActor("operator", UserRole.PersonnelManager, canPay: true); var accounts = new AccountService(connection);
+        var actor = CreateActor("operator", UserRole.PersonnelManager, canPay: true, canViewSalary: true, canViewIban: true); var accounts = new AccountService(connection);
         await accounts.SetActiveAsync(admin, await TargetAsync(actor.Username), false, default);
         await accounts.SetActiveAsync(admin, await TargetAsync(actor.Username), true, default);
         Assert.That(await AccountAuthorization.IsCurrentAsync(connection, actor, default), Is.False);
@@ -179,7 +189,7 @@ public partial class GuideDatabaseTests
     [Test, Category("Roles")]
     public async Task DeletedAndRecreatedUsernameCannotReuseOldSession()
     {
-        var actor = CreateActor("operator", UserRole.PersonnelManager, canPay: true); var accounts = new AccountService(connection);
+        var actor = CreateActor("operator", UserRole.PersonnelManager, canPay: true, canViewSalary: true, canViewIban: true); var accounts = new AccountService(connection);
         await accounts.DeleteAsync(admin, await TargetAsync(actor.Username), default);
         var replacement = CreateActor(actor.Username, UserRole.PersonnelManager);
         Assert.That(await AccountAuthorization.IsCurrentAsync(connection, actor, default), Is.False);
@@ -191,7 +201,7 @@ public partial class GuideDatabaseTests
     [Category("Roles")]
     public async Task RoleOrPasswordChangeInvalidatesExistingSession(bool roleChanged)
     {
-        var actor = CreateActor("operator", UserRole.PersonnelManager, canPay: true);
+        var actor = CreateActor("operator", UserRole.PersonnelManager, canPay: true, canViewSalary: true, canViewIban: true);
         if (roleChanged) Execute("UPDATE dbo.admin SET RoleName=N'Viewer' WHERE username=N'operator'");
         else
         {
@@ -250,7 +260,7 @@ public partial class GuideDatabaseTests
     [Test, Category("Passwords")]
     public async Task WrongCurrentPasswordDoesNotChangeCredentialsOrAudit()
     {
-        var actor = CreateActor("password-user", UserRole.PersonnelManager);
+        var actor = CreateActor("password-user", UserRole.PersonnelManager, canViewIban: true, canViewSalary: true);
         const string next = "Replacement password 2026!";
         await Assert.ThrowsAsync<UnauthorizedAccessException>(async () => await new AccountService(connection).ChangePasswordAsync(actor, "wrong-password", next, next));
         Assert.That(await AccountAuthorization.IsCurrentAsync(connection, actor, default), Is.True);
@@ -274,7 +284,7 @@ public partial class GuideDatabaseTests
     [Test, Category("Passwords")]
     public async Task AdminResetCreatesExpiringRestrictedLoginUntilPasswordIsChanged()
     {
-        var actor = CreateActor("reset-user", UserRole.PersonnelManager); var accounts = new AccountService(connection);
+        var actor = CreateActor("reset-user", UserRole.PersonnelManager, canViewIban: true, canViewSalary: true); var accounts = new AccountService(connection);
         var result = await accounts.ResetPasswordAsync(admin, await TargetAsync(actor.Username), "Test-only-password-123");
         Assert.That(Convert.FromBase64String(result.TemporaryPassword), Has.Length.EqualTo(24));
         Assert.That(result.ExpiresUtc.Kind, Is.EqualTo(DateTimeKind.Utc));
@@ -296,13 +306,13 @@ public partial class GuideDatabaseTests
         var fresh = (await accounts.AuthenticateAsync(actor.Username, next))!;
         Assert.That(fresh.MustChangePassword, Is.False);
         Assert.That(Scalar("SELECT PasswordResetExpiresUtc FROM dbo.admin WHERE username=N'reset-user'"), Is.EqualTo(DBNull.Value));
-        await new PersonnelService(connection, fresh).SaveAsync(PersonnelGroup.General, Person(), true, employmentStart: new DateTime(2000, 1, 1));
-        Assert.That(Scalar("SELECT PARA FROM dbo.Calisan"), Is.EqualTo(100m));
+        await new PersonnelService(connection, fresh).SaveAsync(PersonnelGroup.General, Person(amount: 0m), true, employmentStart: new DateTime(2000, 1, 1));
+        Assert.That(Scalar("SELECT PARA FROM dbo.Calisan"), Is.EqualTo(0m));
     }
     [Test, Category("Passwords")]
     public async Task TemporaryPasswordExpiryIsEnforcedByDatabaseTime()
     {
-        var actor = CreateActor("reset-user", UserRole.PersonnelManager); var accounts = new AccountService(connection);
+        var actor = CreateActor("reset-user", UserRole.PersonnelManager, canViewIban: true, canViewSalary: true); var accounts = new AccountService(connection);
         var result = await accounts.ResetPasswordAsync(admin, await TargetAsync(actor.Username), "Test-only-password-123");
         Execute("UPDATE dbo.admin SET PasswordResetExpiresUtc=DATEADD(second,-1,SYSUTCDATETIME()) WHERE username=N'reset-user'");
         Assert.That(await accounts.AuthenticateAsync(actor.Username, result.TemporaryPassword), Is.Null);
@@ -323,7 +333,7 @@ public partial class GuideDatabaseTests
     [Test, Category("Passwords")]
     public async Task ResetRequiresCorrectAdministratorPasswordAndRefusesSelfOrInactiveTarget()
     {
-        var actor = CreateActor("reset-user", UserRole.PersonnelManager); var accounts = new AccountService(connection);
+        var actor = CreateActor("reset-user", UserRole.PersonnelManager, canViewIban: true, canViewSalary: true); var accounts = new AccountService(connection);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(async () => await accounts.ResetPasswordAsync(admin, await TargetAsync(actor.Username), "wrong-password"));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(async () => await accounts.ResetPasswordAsync(actor, await TargetAsync(admin.Username), "Test-only-password-123"));
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await accounts.ResetPasswordAsync(admin, await TargetAsync(admin.Username), "Test-only-password-123"));
@@ -335,7 +345,7 @@ public partial class GuideDatabaseTests
     [Test, Category("Passwords")]
     public async Task ResetCannotTargetRecreatedAccountOrUseRevokedAdministratorSession()
     {
-        var actor = CreateActor("reset-user", UserRole.PersonnelManager); var accounts = new AccountService(connection);
+        var actor = CreateActor("reset-user", UserRole.PersonnelManager, canViewIban: true, canViewSalary: true); var accounts = new AccountService(connection);
         var oldTarget = await TargetAsync(actor.Username);
         await accounts.DeleteAsync(admin, await TargetAsync(actor.Username), default); CreateActor(actor.Username, UserRole.PersonnelManager);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await accounts.ResetPasswordAsync(admin, oldTarget, "Test-only-password-123"));
@@ -348,7 +358,7 @@ public partial class GuideDatabaseTests
     [Category("Passwords")]
     public async Task PasswordMutationAuditFailureRollsBackHashFlagsAndSessions(bool reset)
     {
-        var actor = CreateActor("reset-user", UserRole.PersonnelManager); var accounts = new AccountService(connection); var target = await TargetAsync(actor.Username);
+        var actor = CreateActor("reset-user", UserRole.PersonnelManager, canViewIban: true, canViewSalary: true); var accounts = new AccountService(connection); var target = await TargetAsync(actor.Username);
         Execute("CREATE TRIGGER dbo.GuideBlockAudit ON dbo.AuditLog AFTER INSERT AS THROW 51099,N'Test password audit rollback',1;");
         if (reset) await Assert.ThrowsAsync<SqlException>(async () => await accounts.ResetPasswordAsync(admin, target, "Test-only-password-123"));
         else await Assert.ThrowsAsync<SqlException>(async () => await accounts.ChangePasswordAsync(actor, "Test-only-password-123", "A replacement password phrase", "A replacement password phrase"));
@@ -361,7 +371,7 @@ public partial class GuideDatabaseTests
     [Test, Category("Passwords")]
     public async Task ConcurrentPasswordChangesHaveOnlyOneWinner()
     {
-        var actor = CreateActor("password-user", UserRole.PersonnelManager); var accounts = new AccountService(connection);
+        var actor = CreateActor("password-user", UserRole.PersonnelManager, canViewIban: true, canViewSalary: true); var accounts = new AccountService(connection);
         async Task<bool> Change(string next)
         {
             try { await accounts.ChangePasswordAsync(actor, "Test-only-password-123", next, next); return true; }
@@ -374,7 +384,7 @@ public partial class GuideDatabaseTests
     [Test, Category("Passwords")]
     public async Task PasswordMetadataAndSecretsAreNotExportedOrLogged()
     {
-        var actor = CreateActor("reset-user", UserRole.PersonnelManager); var accounts = new AccountService(connection);
+        var actor = CreateActor("reset-user", UserRole.PersonnelManager, canViewIban: true, canViewSalary: true); var accounts = new AccountService(connection);
         var result = await accounts.ResetPasswordAsync(admin, await TargetAsync(actor.Username), "Test-only-password-123");
         var data = await accounts.ListAsync(admin, default);
         Assert.That(data.Columns.Contains("password_hash"), Is.False); Assert.That(data.Columns.Contains("password"), Is.False);
@@ -403,7 +413,7 @@ public partial class GuideDatabaseTests
     [Test, Category("Payments")]
     public async Task RevocationPreservesUncertainPaymentAndFreshLoginCanRetrySameRequest()
     {
-        var actor = CreateActor("operator", UserRole.PersonnelManager, canPay: true); var service = new PersonnelService(connection, actor);
+        var actor = CreateActor("operator", UserRole.PersonnelManager, canPay: true, canViewSalary: true, canViewIban: true); var service = new PersonnelService(connection, actor);
         await Service.SaveAsync(PersonnelGroup.General, Person(), true, employmentStart: new DateTime(2000, 1, 1));
         var journal = new PaymentJournal(connection, Path.Combine(directory, "revoked-pending"));
         var interrupted = new PaymentWorkflow(journal, new LostReplyGateway(service, false), actor);
@@ -424,7 +434,7 @@ public partial class GuideDatabaseTests
     [Test, Category("Roles")]
     public async Task AuthorizationRowLockPreventsRevocationInMiddleOfTransaction()
     {
-        var actor = CreateActor("operator", UserRole.PersonnelManager, canPay: true);
+        var actor = CreateActor("operator", UserRole.PersonnelManager, canPay: true, canViewSalary: true, canViewIban: true);
         await using (var work = await SqlUnitOfWork.OpenAsync(connection, default))
         {
             await AccountAuthorization.DemandAsync(work, actor, AccountAccess.Edit, default);
@@ -457,7 +467,7 @@ public partial class GuideDatabaseTests
     [Test, Category("Payments")]
     public async Task RevokedUserCannotAcknowledgeCachedRejectedPayment()
     {
-        var actor = CreateActor("operator", UserRole.PersonnelManager, canPay: true); var service = new PersonnelService(connection, actor);
+        var actor = CreateActor("operator", UserRole.PersonnelManager, canPay: true, canViewSalary: true, canViewIban: true); var service = new PersonnelService(connection, actor);
         await Service.SaveAsync(PersonnelGroup.General, Person(), true, employmentStart: new DateTime(2000, 1, 1));
         var journal = new PaymentJournal(connection, Path.Combine(directory, "rejected-pending"));
         await Assert.ThrowsAsync<IOException>(async () => await new PaymentWorkflow(journal, new LostReplyGateway(service, false), actor).BeginAsync(PersonnelGroup.General, Person().Tc, 80m, await VersionAsync(PersonnelGroup.General, Person().Tc)));
@@ -522,7 +532,7 @@ public partial class GuideDatabaseTests
         await Service.SaveAsync(group, Person(), true, employmentStart: new DateTime(2000, 1, 1)); byte[] version = await VersionAsync(group);
         var winner = nameChanged ? Person() with { FirstName = "Ayşe" } : Person() with { Iban = "TR330006100519786457841326" };
         var stale = nameChanged ? Person() with { Iban = "TR470000100100000350930001" } : Person() with { LastName = "Başka" };
-        var anotherUser = new PersonnelService(connection, CreateActor("second-user", UserRole.PersonnelManager, canPay: true));
+        var anotherUser = new PersonnelService(connection, CreateActor("second-user", UserRole.PersonnelManager, canPay: true, canViewSalary: true, canViewIban: true));
         await anotherUser.SaveAsync(group, winner, false, expectedVersion: version);
         byte[] currentVersion = await VersionAsync(group);
         int auditCount = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"));
@@ -545,7 +555,7 @@ public partial class GuideDatabaseTests
     {
         var group = (PersonnelGroup)groupId;
         await Service.SaveAsync(group, Person(), true, employmentStart: new DateTime(2000, 1, 1)); byte[] version = await VersionAsync(group);
-        var actors = new Dictionary<string, UserSession> { ["Birinci"] = CreateActor("Birinci", UserRole.PersonnelManager), ["İkinci"] = CreateActor("İkinci", UserRole.PersonnelManager) };
+        var actors = new Dictionary<string, UserSession> { ["Birinci"] = CreateActor("Birinci", UserRole.PersonnelManager, canViewIban: true, canViewSalary: true), ["İkinci"] = CreateActor("İkinci", UserRole.PersonnelManager, canViewIban: true, canViewSalary: true) };
         async Task<bool> Edit(string first)
         {
             try { await new PersonnelService(connection, actors[first]).SaveAsync(group, Person() with { FirstName = first }, false, expectedVersion: version); return true; }
@@ -565,9 +575,10 @@ public partial class GuideDatabaseTests
         var group = (PersonnelGroup)groupId;
         await Service.SaveAsync(group, Person(), true, employmentStart: new DateTime(2000, 1, 1)); byte[] oldVersion = await VersionAsync(group);
         await Service.DeleteAsync(group, Person().Tc, await VersionAsync(group), employmentEnd: new DateTime(2099, 12, 31)); await ReactivateAndEditAsync(group, Person());
+        object updatesBeforeStaleWrite = Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action=N'Person.Update'");
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await Service.SaveAsync(group, Person() with { FirstName = "Eski ekran" }, false, expectedVersion: oldVersion));
         Assert.That((await Service.ListAsync(group)).Rows[0]["AD"], Is.EqualTo("Ada"));
-        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action=N'Person.Update'"), Is.Zero);
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action=N'Person.Update'"), Is.EqualTo(updatesBeforeStaleWrite));
     }
     [Test, Category("Personnel")]
     public async Task RefreshedVersionAllowsUpdateAndMultipleLeavesRemainUnchanged()
@@ -605,7 +616,7 @@ public partial class GuideDatabaseTests
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.izinler"), Is.EqualTo(1));
         Assert.That(Scalar("SELECT SUM(Delta) FROM dbo.PaymentLedger"), Is.EqualTo(270m));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"), Is.EqualTo(auditCount));
-        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(38));
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(39));
         Assert.That(Directory.GetFiles(backups, "*.bak.abk"), Has.Length.EqualTo(1));
     }
     [Test, Category("Migrations")]
@@ -873,7 +884,7 @@ public partial class GuideDatabaseTests
 
             Assert.That(Scalar("SELECT PARA FROM dbo.Calisan"), Is.EqualTo(100m));
             Assert.That(await VersionAsync(), Has.Length.EqualTo(8));
-            Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(38));
+            Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(39));
             Assert.That(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(selected)), Is.EqualTo(digest));
             Assert.That(File.Exists(selected + ".verified"), Is.True);
             Assert.That(Directory.GetFiles(folder, prefix + "*.bak.abk"), Has.Length.EqualTo(15));
