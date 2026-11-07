@@ -1,8 +1,30 @@
 # AccountingApp
 
-7 Kasım 2026 tarihinde 1.3.33-dev için yerel teslim hazırlığı tamamlandı. Operatör devri, mutabakat, kurtarma ve geri dönüş adımları kayıt altında. Gerçek kullanım pilotu ve saha kabulü bekliyor. [Pilot ve teslim kaydı](docs/PILOT_VE_TESLIM_1_3_33_DEV.md)
+**Güncel sürüm v1.3.33**, Windows x64 için iki ayrı paketle yayımlandı. Her iki paket .NET 10.0.14 çalışma zamanını içerir. Merkezi kullanımda istemci ve sunucu için aynı sürümü kullanın. Sunucu **şema 138** ve **API 1.32** gerektirir. [Sürüm sayfası](https://github.com/frknylmzkng/AccountingApp/releases/tag/v1.3.33) · [Değişiklik günlüğü](CHANGELOG.md)
 
-7 Kasım 2026 güncel kaynak **1.3.33-dev / şema 138 / API 1.32**. Şema 138 proje maliyet görünümündeki ters hareket hesabını düzeltir. Yerel 1.3.33-dev teslim kaydı şema 137’ye aittir. Yedek seçimi, sınırlı CSV sorguları, aynalama ve klavye erişimi iyileştirildi. Gerçek kullanım pilotu bekliyor. [Değişiklik günlüğü](CHANGELOG.md) · [Pilot ve teslim kaydı](docs/PILOT_VE_TESLIM_1_3_33_DEV.md)
+## Windows paketlerini indir ve kur
+
+- [Windows istemcisi (v1.3.33, x64)](https://github.com/frknylmzkng/AccountingApp/releases/download/v1.3.33/AccountingApp-v1.3.33-desktop-win-x64.zip)
+- [Merkezi API sunucusu (v1.3.33, x64)](https://github.com/frknylmzkng/AccountingApp/releases/download/v1.3.33/AccountingApp-v1.3.33-server-win-x64.zip)
+- [SHA-256 dosya özetleri](https://github.com/frknylmzkng/AccountingApp/releases/download/v1.3.33/SHA256SUMS.txt)
+
+Paketler imzasızdır. PowerShell’de `Get-FileHash <paket.zip> -Algorithm SHA256` komutunda dosya adını belirterek sonucu yayımlanan özetle karşılaştırabilirsiniz. [Yayın doğrulaması](https://github.com/frknylmzkng/AccountingApp/actions/runs/42359399523/attempts/2)
+
+### Windows istemcisi
+
+1. Önceki Muhasebe pencerelerini kapatın. Mevcut yerel veritabanı şema 138’den eskiyse doğrulanmış yedek alın ve yükseltmeyi ayrı bakım adımında tamamlayın. [Veritabanı ve bakım adımları](docs/DAGITIM_SONLANDIRMA_VE_COK_BILGISAYAR.md#gerçek-bakım-sırası)
+2. İstemci ZIP’inin tamamını yeni bir klasöre çıkarın ve kökteki `AccountingApp.Setup.exe` dosyasını açın. Güncellemede **Mevcut bağlantıyı koru (güncelleme)** seçeneğini kullanın. Yeni bir sunucuya bağlanmak için **Merkezi HTTPS API'ye bağlan** seçeneğini seçin ve adresini girin.
+3. İlk kez yerel veritabanı kuruyorsanız SQL Server Express LocalDB kurulu olmalıdır. **Yeni yerel veritabanı ve ilk yönetici** seçeneğinde yönetici hesabını belirleyin. **Devam** ve **Kur** adımlarını tamamlayıp **Muhasebe - Güncel** kısayolundan giriş yapın.
+
+### Merkezi API sunucusu
+
+1. API ZIP’inin tamamını sunucuda yeni bir klasöre çıkarın. Mevcut veritabanını yükseltiyorsanız önce istemcileri ve API’yi kapatın, doğrulanmış yedek alın ve şema 138’i ayrı bakım adımında uygulayın.
+2. `server.example.json` dosyasından `server.json`, `database-profile.example.json` dosyasından SQL bağlantı profilinizi oluşturun. `AccountingApi:DatabaseProfilePath` alanını bu profile yönlendirin. `ListenUrl`, `AllowedHosts` ve istemcilerin güvendiği HTTPS sertifikasını yapılandırın. Tek bilgisayarda LocalDB için `AllowUserLocalDb` değerini `true` yapın ve aynı Windows hesabıyla `https://localhost:7443` kullanın. Çok bilgisayarlı kurulumda sunucuda SQL Express veya SQL Server kullanın. [Sunucu ve TLS yapılandırması](docs/DAGITIM_SONLANDIRMA_VE_COK_BILGISAYAR.md#topolojiler)
+3. Paket klasöründe `AccountingApp.Server.exe` dosyasını çalıştırın. Sunucu açıldıktan sonra istemci kurulumunda aynı HTTPS adresini girin.
+
+## Geliştirme geçmişi
+
+7 Kasım 2026’da 1.3.33-dev yerel teslimi hazırlandı. Daha sonra başarılı Actions çalışmasındaki istemci ve API paketleri şema 138 ile yerel olarak kuruldu. Gerçek kullanım pilotu ve saha kabulü bekliyor. [Pilot ve teslim kaydı](docs/PILOT_VE_TESLIM_1_3_33_DEV.md)
 
 6 Kasım 2026 güncel kaynak: [kurulum ve dağıtım sonlandırması](docs/DAGITIM_SONLANDIRMA_VE_COK_BILGISAYAR.md), **1.3.32-dev / şema 137 / API 1.32**. Tam ZIP/manifest doğrulama, salt okunur bakım/geri dönüş planı, bağımlılık envanteri, isteğe bağlı Authenticode ve kurulum kimlik kontrolleri eklendi. Çok bilgisayarlı bakım rehberi hazır. CI tam test kapısı korunur; denemeler/Actions yapılmadı. Doğrulanmış kurulum öncesi yedek sonrası 1.3.32-dev istemci/API/kısayol kurulumu tamamlandı; şema 137 değişmedi, paket imzasızdır. [Kalan 2 ana iş paketi](docs/KALAN_IS_PAKETLERI_2026_11_06.md). Aşağıdaki kayıtlar tarihseldir.
 
@@ -74,32 +96,6 @@ Responsive arayüz güncellemesi (27 Ekim 2026): ana ekran ve diğer 11 ekran/ak
 
 Güncel kaynak doğrulaması (27 Ekim 2026): **610 test başarılı, 0 başarısız, 0 atlanan**; Release derlemesi 0 uyarı / 0 hata. Entegrasyon ve geri yükleme testleri gerçek kullanıcı veritabanından ayrı, testin oluşturduğu geçici LocalDB motorunda tamamlandı; motor temizlendi. [CI ortamındaki ekran boyutu sınırlamasının düzeltmesi](docs/CI_RESPONSIVE_TESTLER.md), geniş yerleşimlerin küçük sanal ekranlarda da gerçekten sınanmasını sağlar.
 
-## Windows paketini indir ve kur
-
-**[Windows x64 paketini indir (v1.2.0)](https://github.com/frknylmzkng/AccountingApp/releases/download/v1.2.0/AccountingApp-v1.2.0-win-x64.zip)** · [Sürüm notları](https://github.com/frknylmzkng/AccountingApp/releases/tag/v1.2.0) · [SHA256 doğrulama dosyası](https://github.com/frknylmzkng/AccountingApp/releases/download/v1.2.0/SHA256SUMS.txt)
-
-1. Windows 64 bit bilgisayarda SQL Server Express LocalDB'nin kurulu olduğundan emin olun. .NET 10.0.13 çalışma bileşenleri ZIP'e dahildir; ayrıca .NET veya SDK kurmanız gerekmez.
-2. ZIP'in **tamamını yeni bir klasöre** çıkarın; yalnızca EXE dosyasını taşımayın. Güncelleme yapıyorsanız önce açık uygulamayı kapatın.
-3. Güncellemede önceki `appsettings.json` dosyanızı yeni klasöre taşıyın; ilk kurulumda aşağıdaki iki komutu çalıştırın. Ardından `WinFormsApp2.exe` dosyasını açıp hesabınızla giriş yapın.
-4. Kısayol kullanıyorsanız hedefini yeni klasördeki `WinFormsApp2.exe` dosyasına yönlendirin; çalışma klasörünü de aynı klasör olarak ayarlayın.
-
-**Mevcut veritabanını kullanıyorsanız:** Önceki `appsettings.json` bağlantı ayarınızı yeni klasöre taşıyın veya mevcut MDF yolunu bu dosyada belirtin. Varsayılan yol `%USERPROFILE%\Documents\Muhasebe2.mdf` dosyasıdır. Mevcut kullanıcı adı ve parolanızla giriş yapabilirsiniz; ilk kurulum komutlarını çalıştırmayın. Giriş hazırlığı, gerekli şema yükseltmelerini (105 izin sürümü dahil) doğrulanmış yedek aldıktan sonra uygular.
-
-**Yalnızca ilk kurulumda:** Paketi çıkardığınız klasörde PowerShell açıp şu komutları çalıştırın:
-
-```powershell
-Copy-Item .\database\appsettings.new-install.example.json .\appsettings.json
-.\AccountingApp.DatabaseSetup.exe --config .\appsettings.json
-```
-
-Kurulum aracının istediği ilk yönetici kullanıcı adını, parolayı ve parola tekrarını girin. Sabit başlangıç parolası yoktur. Kurulum tamamlanınca `WinFormsApp2.exe` dosyasını açın. Ayrıntılar: [veritabanı kurulumu](database/README.md) ve [kullanım kılavuzu](docs/KULLANIM_VE_TEST.md).
-
-v1.2.0 paketi responsive arayüzleri, kayıt seçimi/sürüm korumalarını, güncel ödeme raporlarını ve yedek aynalama tekrar denemesini içerir. Uygulama, `AccountingApp.DatabaseSetup.exe` kurulum aracı, veritabanı betikleri ve kullanım belgeleri birlikte dağıtılır. Gerçek kullanıcı veritabanı pakete dahil değildir. Başlangıçta kurulu Microsoft SqlLocalDB aracı shell kullanmadan çağrılır; bu işlem veritabanını silmez veya yeniden oluşturmaz. LocalDB yerine güvenilir TLS sertifikası yapılandırılmış yerel SQL Express de kullanılabilir.
-
-İndirdiğiniz ZIP'in bütünlüğünü `Get-FileHash .\AccountingApp-v1.2.0-win-x64.zip -Algorithm SHA256` komutuyla kontrol edip sonucu yukarıdaki `SHA256SUMS.txt` dosyasıyla karşılaştırabilirsiniz. Dağıtılan paket, [610 testin geçtiği GitHub Actions çalışmasında](https://github.com/frknylmzkng/AccountingApp/actions/runs/40551422638) üretilmiştir.
-
-Uygulama EXE yanındaki `appsettings.json` dosyasını kullanır. Varsayılan bağlantı, kullanıcının Documents/Muhasebe2.mdf dosyasıdır. Yönetici, Ayarlar ekranından başka JSON profilini doğrulayarak seçebilir; değişiklik yeniden girişte uygulanır. SQL Express örneği `database/appsettings.sqlexpress.example.json` içindedir. İlk kurulum ve mevcut veritabanı yükseltmesi farklı işlemlerdir; `database/README.md` ayrıntıları açıklar.
-
 Yeni özellikler:
 
 Yerel geliştirme (henüz v1.2.0 paketinde değil): 10 dakika uygulama etkinliği olmadığında otomatik kilit ve kaydedilmemiş alanlar için grup bazlı uyarılar. Yeni SQL yükseltmesi gerekmez; mevcut 112 şeması kullanılır. [Kullanım ve sınırlar](docs/OTOMATIK_KILIT_VE_DEGISIKLIK_UYARISI.md).
@@ -129,7 +125,7 @@ Yerel geliştirme (henüz v1.2.0 paketinde değil): personel silme yerine arşiv
 
 PBKDF2-HMAC-SHA256, 600.000 yineleme, rastgele 16 bayt salt ve 32 bayt hash korunur. Eski parolalar kontrollü transaction ile dönüştürülür; bozuk hash açık metne geri düşmez. Kullanıcı listesinde parola veya hash okunmaz. Parola alanları maskelidir. Parola boşlukları korunur; yeni hesaplarda ve parola değişiminde sınır 15–1024 karakterdir. Mevcut kısa parolalar değiştirilmelerine kadar girişte geçerlidir.
 
-Her kullanıcı üst menüdeki **Parolamı değiştir** ile mevcut parolasını doğrulayarak yeni parola belirleyebilir. Yönetici, hesap listesinden başka bir etkin hesabı seçip **Parola sıfırla…** ile kendi parolasını tekrar doğrular. Uygulama 30 dakika geçerli rastgele geçici parola üretir; bu hesap kendi parolasını belirleyene kadar diğer ekranlara erişemez. Parola değişimi ve sıfırlama eski oturumları geçersiz kılar. Ayrıntılar ve deneme adımları: [parola güvenliği kılavuzu](docs/PAROLA_DEGISTIRME_VE_SIFIRLAMA.md). Bu özellikler yukarıdaki v1.2.0 Release paketine dahildir.
+Her kullanıcı üst menüdeki **Parolamı değiştir** ile mevcut parolasını doğrulayarak yeni parola belirleyebilir. Yönetici, hesap listesinden başka bir etkin hesabı seçip **Parola sıfırla…** ile kendi parolasını tekrar doğrular. Uygulama 30 dakika geçerli rastgele geçici parola üretir; bu hesap kendi parolasını belirleyene kadar diğer ekranlara erişemez. Parola değişimi ve sıfırlama eski oturumları geçersiz kılar. Ayrıntılar ve deneme adımları: [parola güvenliği kılavuzu](docs/PAROLA_DEGISTIRME_VE_SIFIRLAMA.md). Bu özellikler v1.2.0’dan beri Windows paketinde yer alır.
 
 Hatalı giriş sınırı: aynı hesapta 15 dakika içinde 5 yanlış parola, 5 dakikalık geçici kilit oluşturur. Sayaç veritabanında tutulur; yeniden başlatma veya farklı pencereler sınırı aşamaz. Açık oturumlar etkilenmez. Mevcut parolayla yeniden doğrulamalar da aynı bütçeyi kullanır. [Kullanım ve deneme kılavuzu](docs/HATALI_GIRIS_SINIRLAMASI.md).
 
