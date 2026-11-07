@@ -50,8 +50,8 @@ public class DatabaseSetupTests
         Assert.That(PasswordHasher.Verify(TestPassword, (string)Scalar("SELECT password_hash FROM dbo.admin")!), Is.True);
         Assert.That(new AdminStore(settings.CreateConnectionString()).Authenticate("setup-admin", TestPassword), Is.True);
         var store = new PersonnelStore(settings.CreateConnectionString());
-        var person = new PersonnelDetails(11111111111L, "Ada", "Test", "TR000000000000000000000000", 1500.50m);
-        store.Add(PersonnelGroup.General, person);
+        var person = new PersonnelDetails(11111111111L, "Ada", "Test", "TR470000100100000350930001", 1500.50m);
+        store.Add(PersonnelGroup.General, person, employmentStart: new DateTime(2000, 1, 1));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.izinler"), Is.Zero);
         // Installation baseline remains immutable; the application's additive upgrade supplies versions.
         string upgradeFolder = Path.Combine(Path.GetTempPath(), "AccountingAppTests", "upgrade-" + Guid.NewGuid().ToString("N"));
@@ -61,8 +61,9 @@ public class DatabaseSetupTests
         Assert.That(Scalar("SELECT IzinSuresi FROM dbo.izinler"), Is.EqualTo(3));
         store.Update(PersonnelGroup.General, person with { Amount = 2000m }, (byte[])Scalar("SELECT RecordVersion FROM dbo.Calisan")!);
         Assert.That(Scalar("SELECT IzinSuresi FROM dbo.izinler"), Is.EqualTo(3));
-        store.Delete(PersonnelGroup.General, person.Tc, (byte[])Scalar("SELECT RecordVersion FROM dbo.Calisan")!);
-        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.izinler"), Is.Zero);
+        store.Delete(PersonnelGroup.General, person.Tc, (byte[])Scalar("SELECT RecordVersion FROM dbo.Calisan")!, employmentEnd: new DateTime(2099, 12, 31));
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.izinler"), Is.EqualTo(1));
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.Calisan WHERE ArchivedUtc IS NOT NULL"), Is.EqualTo(1));
         Assert.Throws<SqlException>(() => Execute("UPDATE dbo.admin SET password=N'plaintext'"));
     }
 

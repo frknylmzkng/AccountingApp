@@ -32,6 +32,10 @@ internal sealed partial class PaymentsForm
             button.Click += (_, _) => { if (ReferenceEquals(target, payment)) workspace.AutoScrollPosition = Point.Empty; else workspace.ScrollControlIntoView(target); };
             navigation.Controls.Add(button);
         }
+        var bank=new Button{Text="Banka CSV / ödeme eşleştirme…",AutoSize=true};
+        bank.Click+=(_,_)=>{if(IsOperationRunning||!ConfirmDiscardChanges("Banka eşleştirmesini açma"))return;using var d=new BankReconciliationForm(User);d.SessionRevoked+=(_,_)=>NotifySessionRevoked();d.ShowDialog(this);};
+        Load+=(_,_)=>bank.Visible=Session?.Role==UserRole.Admin;
+        navigation.Controls.Add(bank);navigation.AutoScroll=true;
         outer.Controls.Add(navigation, 0, 1); outer.Controls.Add(workspace, 0, 2); Controls.Add(outer);
         // Visible columns change only presentation; guarded actions retain the full DataRow.
         people.AutoGenerateColumns = false; people.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;

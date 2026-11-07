@@ -18,7 +18,7 @@ public class MoneyInputTests
             foreach (string text in new[] { "1500,50", "1500.50", "1.500,50", "1,500.50", " 1500,50 " })
             {
                 bool valid = PersonnelInput.TryCreate("11111111111", "Ada", "Test",
-                    "TR000000000000000000000000", text, out var person, out string error);
+                    "TR470000100100000350930001", text, out var person, out string error);
                 Assert.That(valid, Is.True, text + ": " + error);
                 Assert.That(person!.Amount, Is.EqualTo(1500.50m), text);
             }

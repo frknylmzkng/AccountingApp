@@ -17,14 +17,16 @@ internal sealed partial class AccountService
     private static async Task<Credential?> ReadCredentialAsync(SqlConnection connection, string username, CancellationToken token)
     {
         using var cmd = new SqlCommand(@"SELECT TOP(2) password_hash,RoleName,IsActive,SessionVersion,username,SessionEpoch,MustChangePassword,
-            CASE WHEN PasswordResetExpiresUtc>SYSUTCDATETIME() THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END ResetValid
+            CASE WHEN PasswordResetExpiresUtc>SYSUTCDATETIME() THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END ResetValid,
+            CanPay,CanExportPersonalData,CanViewSalary,CanViewIban
             FROM dbo.admin WHERE username=@username", connection);
         cmd.Text("@username", username);
         using var r = await cmd.ExecuteReaderAsync(token).ConfigureAwait(false);
         if (!await r.ReadAsync(token).ConfigureAwait(false) || r.IsDBNull(0) || !Enum.TryParse<UserRole>(r.GetString(1), out var role) || !Enum.IsDefined(role)) return null;
         var user = new UserSession(r.GetString(4), role)
         {
-            SecurityVersion = r.GetFieldValue<byte[]>(3).ToArray(), SecurityEpoch = r.GetGuid(5), MustChangePassword = r.GetBoolean(6)
+            SecurityVersion = r.GetFieldValue<byte[]>(3).ToArray(), SecurityEpoch = r.GetGuid(5), MustChangePassword = r.GetBoolean(6),
+            PaymentGranted = r.GetBoolean(8), PersonalDataExportGranted = r.GetBoolean(9), SalaryViewGranted = r.GetBoolean(10), IbanViewGranted = r.GetBoolean(11)
         };
         var result = new Credential(r.GetString(0), user, r.GetBoolean(2), r.GetBoolean(7));
         return await r.ReadAsync(token).ConfigureAwait(false) ? null : result;

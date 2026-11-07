@@ -12,24 +12,28 @@ internal sealed partial class PaymentsForm : SessionForm
     private readonly DateTimePicker day = new() { Width = 130, Format = DateTimePickerFormat.Short };
     private readonly TextBox declared = new() { Name = "declaredTotal", Width = 130, PlaceholderText = "Beyan edilen TL" };
     private readonly Button pay = new() { Text = "Ödeme kaydet", AutoSize = true };
+    private readonly Button receipt = new() { Text = "Seçili ödeme fişi" };
+    private readonly Button closing = new() { Text = "Güncel önizleme" };
     private readonly Button acknowledge = new() { Text = "Sonucu onayla / yeni ödeme", AutoSize = true };
     private readonly Label paymentState = new() { AutoSize = true, MaximumSize = new Size(1000, 0) };
     private PaymentState? pending;
     private bool paymentStateLoaded;
+    private readonly ListPager peoplePager, ledgerPager;
     private PaymentWorkflow Workflow => new(AppDatabase.ConnectionString, User);
     internal Action<IWin32Window, PrintReport, bool> PreviewReport = PaymentPrinting.Preview;
     public PaymentsForm()
     {
         Text = "Personel ödemeleri ve defteri"; ClientSize = new Size(1080, 680);
+        day.Value = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, DailyClosingService.BusinessZone).Date;
         RecordSelection.Configure(people); RecordSelection.Configure(ledger);
         var reverse = new Button { Text = "Ödemeyi iptal et" };
-        var receipt = new Button { Text = "Seçili ödeme fişi" };
-        var closing = new Button { Text = "Kapanış önizlemesi" };
         var inspect = new Button { Text = "Ödeme sonucunu kontrol et" };
         ArrangePayments(reverse, receipt, closing, inspect);
-        EditControls.Add(pay); EditControls.Add(acknowledge);
+        peoplePager = ListPager.Attach(people, this, ReloadAsync);
+        ledgerPager = ListPager.Attach(ledger, this, ReloadAsync, "hareket");
+        TrackChanges("Yeni ödeme", amount);
         pay.Click += Pay; reverse.Click += Reverse; receipt.Click += Receipt; closing.Click += PrintClosing;
-        inspect.Click += async (_, _) => await ReloadAsync();
+        inspect.Click += async (_, _) => await RefreshScreenAsync();
         acknowledge.Click += async (_, _) =>
         {
             if (await RunOperationAsync(token => Workflow.AcknowledgeAsync(token)))
@@ -39,17 +43,20 @@ internal sealed partial class PaymentsForm : SessionForm
             }
         };
         pay.Enabled = false; acknowledge.Enabled = false;
-        reverse.Enabled = false; Load += async (_, _) => { reverse.Enabled = Session?.Role == UserRole.Admin; if (!PreviewOnly) await ReloadAsync(); };
+        reverse.Enabled = false; Load += async (_, _) => { reverse.Enabled = Session?.Role == UserRole.Admin; RefreshEditState(); if (!PreviewOnly) await ReloadAsync(); };
         RefreshAction = ReloadAsync;
     }
     private async Task ReloadAsync() => await RunOperationAsync(async token =>
     {
-        var state = await Workflow.InspectAsync(token);
-        var list = await People.ListAsync(null, token); var history = await People.LedgerAsync(null, token);
+        var state = User.CanViewSalary ? await Workflow.InspectAsync(token) : null;
+        var page = await People.PageAsync(null, peoplePager.Index, peoplePager.SizeLimit, token, includeLeaves: false);
+        var history = await People.LedgerPageAsync(ledgerPager.Index, ledgerPager.SizeLimit, token);
+        var list = page.Rows;
         if (IsDisposed || token.IsCancellationRequested) return;
         // One selectable row per person even when a person has multiple leave periods.
         var distinct = list.Clone(); foreach (var group in list.AsEnumerable().GroupBy(r => (r.Field<long>("TC"), r.Field<string>("GRUP")))) distinct.ImportRow(group.First());
-        people.DataSource = distinct; people.ClearSelection(); ledger.DataSource = history; ledger.ClearSelection();
+        people.DataSource = distinct; people.ClearSelection(); ledger.DataSource = history.Rows; ledger.ClearSelection();
+        peoplePager.Apply(page); ledgerPager.Apply(history);
         ApplyPaymentState(state);
     });
     private void ApplyPaymentState(PaymentState? state)
@@ -60,7 +67,8 @@ internal sealed partial class PaymentsForm : SessionForm
         else
         {
             amount.Text = MoneyInput.Format(state.Request.Amount);
-            string person = $"TC …{state.Request.Tc.ToString(CultureInfo.InvariantCulture)[^4..]} · {state.Request.Amount:N2} TL: ";
+            string person = (state.Request.Purpose == PaymentPurpose.Advance ? "Avans · " : "Bakiye ödemesi · ") +
+                $"TC …{state.Request.Tc.ToString(CultureInfo.InvariantCulture)[^4..]} · {state.Request.Amount:N2} TL: ";
             paymentState.Text = person + (state.Outcome.Status switch
             {
                 PaymentStatus.Recorded => "Ödeme kaydedildi. Yeni ödeme için sonucu onaylayın.",
@@ -73,38 +81,64 @@ internal sealed partial class PaymentsForm : SessionForm
     }
     protected override void RefreshEditState()
     {
-        bool edit = Session?.CanEdit == true && paymentStateLoaded && !IsOperationRunning;
+        peoplePager?.UpdateState(); ledgerPager?.UpdateState();
+        bool edit = Session?.CanPay == true && paymentStateLoaded && !IsOperationRunning;
         pay.Enabled = edit && (pending == null || pending.Outcome.Status == PaymentStatus.Unconfirmed);
         acknowledge.Enabled = edit && pending != null && pending.Outcome.Status != PaymentStatus.Unconfirmed;
         amount.Enabled = edit && pending == null;
         people.Enabled = !IsOperationRunning && pending == null;
+        receipt.Enabled = closing.Enabled = Session?.CanViewSalary == true && Session?.CanExportPersonalData == true && !IsOperationRunning;
     }
     private async void Pay(object? sender, EventArgs e)
     {
         long tc; decimal value; PersonnelGroup group;
+        byte[]? selectedVersion = null;
         bool retry = pending != null;
         if (pending != null) { tc = pending.Request.Tc; value = pending.Request.Amount; group = pending.Request.Group; }
         else
         {
-            if (!RecordSelection.TryGetTc(people, out tc) || !MoneyInput.TryParse(amount.Text, out value) || value <= 0) { MessageBox.Show(this, "Personel seçin ve pozitif ödeme tutarı girin."); return; }
-            if (!RecordSelection.TryGetKey(people, "GRUP", out string selectedGroup)) return;
-            group = selectedGroup == "Joker" ? PersonnelGroup.Joker : PersonnelGroup.General;
+            if (!MoneyInput.TryParse(amount.Text, out value) || value <= 0) { MessageBox.Show(this, "Personel seçin ve pozitif ödeme tutarı girin."); return; }
+            // Freeze the original identity/version before the confirmation dialog.
+            PaymentTarget selected;
+            try { selected = PaymentTarget.FromSelection(people); }
+            catch (InvalidOperationException ex) { MessageBox.Show(this, ex.Message, "Ödeme seçimi", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+            tc = selected.Tc; group = selected.Group; selectedVersion = selected.PersonVersion;
         }
         string question = $"TC …{tc.ToString(CultureInfo.InvariantCulture)[^4..]} için {value:N2} TL " + (retry ? "önceki ödeme kontrol edilerek yeniden denensin mi?" : "ödeme kaydedilsin mi?");
         if (MessageBox.Show(this, question, "Ödeme onayı", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
-        await RunOperationAsync(async token =>
+        await (retry ? RunOperationAsync(Persist) : RunChangeOperationAsync(Persist));
+        async Task Persist(CancellationToken token)
         {
-            var state = retry ? await Workflow.RetryAsync(token) : await Workflow.BeginAsync(group, tc, value, token);
-            if (!IsDisposed && !token.IsCancellationRequested) ApplyPaymentState(state);
-        });
+            var state = retry ? await Workflow.RetryAsync(token) : await Workflow.BeginAsync(group, tc, value, selectedVersion!, token);
+            if (!IsDisposed && !token.IsCancellationRequested) { ApplyPaymentState(state); AcceptTrackedChanges("Yeni ödeme"); }
+        }
         if (!IsDisposed) await ReloadAsync();
     }
     private DataRow? SelectedPayment() => ledger.SelectedRows.Count == 1 && ledger.SelectedRows[0].DataBoundItem is DataRowView row && row.Row["RequestId"] is Guid ? row.Row : null;
+    private protected override IReadOnlyList<ExportReportChoice> ExportReports()
+    {
+        var reports = base.ExportReports().ToList();
+        if (SelectedPayment() is { } row)
+        {
+            Guid id = (Guid)row["RequestId", DataRowVersion.Original];
+            reports.Add(new("Seçili ödeme fişi — güncel durum", $"Ödeme {id:D}. Güncel SQL kaydından oluşturulur; personel/defter sayfasıyla sınırlı değildir.",
+                async token => ExportReportTables.FromPrint(await new PaymentReportService(AppDatabase.ConnectionString, User).ReceiptAsync(id, token))));
+        }
+        DateTime date = day.Value.Date; string declaration = declared.Text;
+        reports.Add(new("Güncel günlük ödeme önizlemesi", $"{date:dd.MM.yyyy}; geçerli ödemelerin güncel durumu. Kalıcı nakit kapanışı değildir. Beyan alanı kullanılır.",
+            async token =>
+            {
+                if (!MoneyInput.TryParse(declaration, out decimal amount)) throw new ArgumentException("Önce geçerli beyan tutarı girin.");
+                return ExportReportTables.FromPrint(await new PaymentReportService(AppDatabase.ConnectionString, User).ClosingAsync(date, amount, token));
+            }));
+        return reports;
+    }
     private async void Reverse(object? sender, EventArgs e)
     {
         var row = SelectedPayment(); if (row == null) return;
+        Guid requestId = (Guid)row["RequestId", DataRowVersion.Original];
         if (MessageBox.Show(this, "Ödeme iptal edilerek kalan tutara geri eklensin mi?", "Ödeme iptali", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
-        if (await RunOperationAsync(token => People.ReversePaymentAsync((Guid)row["RequestId"], token), "Ödeme iptal edildi.") && !IsDisposed) await ReloadAsync();
+        if (await RunChangeOperationAsync(token => People.ReversePaymentAsync(requestId, token), "Ödeme iptal edildi.") && !IsDisposed) await ReloadAsync();
     }
     private async void Receipt(object? sender, EventArgs e)
     {

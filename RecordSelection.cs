@@ -12,10 +12,23 @@ namespace WinFormsApp2
             grid.AllowUserToDeleteRows = false;
             grid.MultiSelect = false;
             grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            grid.DataBindingComplete += (_, _) => HideInternalColumns(grid);
+            ConfigureClipboard(grid);
+            grid.DataBindingComplete += (_, _) => { HideInternalColumns(grid); if (grid.FindForm() is SessionForm screen && screen.Session != null) SensitiveData.Hide(grid, screen.User); };
+        }
+        internal static void ConfigureClipboard(DataGridView grid, SessionForm? owner = null)
+        {
+            // Native grid copying has no live account check. Route both standard
+            // shortcuts through the same export authorization as files.
+            grid.ClipboardCopyMode = DataGridViewClipboardCopyMode.Disable;
+            grid.KeyDown += async (_, e) =>
+            {
+                if (!e.Control || e.KeyCode is not (Keys.C or Keys.Insert)) return;
+                e.Handled = e.SuppressKeyPress = true;
+                if ((owner ?? grid.FindForm() as SessionForm) is { } screen) await screen.CopyGridAsync(grid);
+            };
         }
 
-        internal static bool IsInternalColumnName(string name) => name is PersonnelConcurrency.ColumnName or LeaveTarget.ColumnName or AccountTarget.VersionColumn or AccountTarget.EpochColumn;
+        internal static bool IsInternalColumnName(string name) => name is "CurrentEmploymentId" or "PersonId" or "ArchivedUtc" or "ArchivedBy" or PersonnelConcurrency.ColumnName or LeaveTarget.ColumnName or AccountTarget.VersionColumn or AccountTarget.EpochColumn;
         internal static bool IsInternalColumn(DataGridViewColumn column) => IsInternalColumnName(column.Name) || IsInternalColumnName(column.DataPropertyName);
 
         internal static void HideInternalColumns(DataGridView grid)

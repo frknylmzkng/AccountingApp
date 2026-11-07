@@ -1,0 +1,7 @@
+<Project>
+  <Target Name="ValidateAccountingReleaseIdentity" BeforeTargets="GenerateAssemblyInfo" Condition="'$(ReleaseBuild)' == 'true'">
+    <Error Condition="'$(ReleaseTag)' != 'v$(VersionPrefix)'" Text="ReleaseTag must exactly match v$(VersionPrefix) from Directory.Build.props." />
+    <Error Condition="'$(Version)' != '$(VersionPrefix)'" Text="A release cannot use a different version or prerelease suffix." />
+    <Error Condition="'$(SourceTreeState)' != 'clean' or '$(SourceRevisionId)' == ''" Text="A release requires a verified clean source tree and commit." />
+  </Target>
+</Project>

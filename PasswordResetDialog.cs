@@ -11,12 +11,13 @@ internal sealed partial class PasswordResetDialog : SessionForm
         Session = user;
         var submit = new Button { Text = "Geçici parola oluştur" };
         ArrangePasswordReset(target.Username, submit); AcceptButton = submit;
+        TrackChanges("Parola doğrulama", current);
         SessionRevoked += (_, _) => SessionInvalidated = true;
         submit.Click += async (_, _) =>
         {
             try
             {
-                bool done = await RunOperationAsync(async token => Result = await new AccountService(AppDatabase.ConnectionString).ResetPasswordAsync(User, target, current.Text, token));
+                bool done = await RunChangeOperationAsync(async token => Result = await new AccountService(AppDatabase.ConnectionString).ResetPasswordAsync(User, target, current.Text, token), savedGroup: "Parola doğrulama");
                 if (!IsDisposed && (done || SessionInvalidated)) { DialogResult = done ? DialogResult.OK : DialogResult.Cancel; Close(); }
             }
             finally { if (!current.IsDisposed) current.Clear(); }

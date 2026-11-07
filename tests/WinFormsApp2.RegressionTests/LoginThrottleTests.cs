@@ -16,7 +16,7 @@ public partial class GuideDatabaseTests
     [Test, Category("LoginThrottle"), Category("Migrations")]
     public async Task ThrottleUpgradePreservesAccountsSessionsAndBusinessRows()
     {
-        await Service.SaveAsync(PersonnelGroup.General, Person(), true);
+        await Service.SaveAsync(PersonnelGroup.General, Person(), true, employmentStart: new DateTime(2000, 1, 1));
         var original = SessionFor(admin.Username);
         object originalHash = Scalar("SELECT password_hash FROM dbo.admin WHERE username=N'test-admin'");
         Execute("DROP TABLE dbo.LoginThrottle; DELETE FROM dbo.__MigrationJournal WHERE ScriptName LIKE N'%104-login-throttle.sql:%'");
@@ -27,7 +27,7 @@ public partial class GuideDatabaseTests
         await FailLogins(admin.Username, 2);
         await SchemaUpgrade.PrepareAsync(connection);
         Assert.That(FailureCount, Is.EqualTo(2));
-        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(6));
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(13));
     }
 
     [Test, Category("LoginThrottle")]

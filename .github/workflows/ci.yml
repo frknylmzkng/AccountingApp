@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 jobs:
   verify:
     runs-on: windows-latest
@@ -13,6 +16,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-dotnet@v6.0.0
         with:
           global-json-file: global.json
@@ -28,13 +32,18 @@ jobs:
       - name: Build and run the complete suite, including disposable restore
         shell: powershell
         run: '& .\automation\otomatik_test_master.ps1 -Full'
-      - name: Publish self-contained package
+      - name: Build versioned Windows release bundle
+        id: package
         shell: pwsh
         run: |
-          .\dotnet.cmd publish WinFormsApp2.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=10.0.13 -p:PublishTrimmed=false -p:RestoreLockedMode=true -p:TreatWarningsAsErrors=true -o artifacts\releases\guide
-          if ($LASTEXITCODE -ne 0) { throw 'Application publish failed.' }
-          .\dotnet.cmd publish tools\DatabaseSetup\AccountingApp.DatabaseSetup.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=10.0.13 -p:PublishTrimmed=false -p:RestoreLockedMode=true -p:TreatWarningsAsErrors=true -o artifacts\releases\guide
-          if ($LASTEXITCODE -ne 0) { throw 'Setup publish failed.' }
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            & .\automation\Build-WindowsRelease.ps1 -Release -ReleaseTag $env:GITHUB_REF_NAME -OutputDirectory artifacts\ci-release
+          } else {
+            & .\automation\Build-WindowsRelease.ps1 -OutputDirectory artifacts\ci-release
+          }
+      - name: Verify downloaded-bundle contract without installing
+        shell: pwsh
+        run: '& .\automation\Verify-WindowsBundle.ps1 -BundleDirectory artifacts\ci-release'
       - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
@@ -43,6 +52,41 @@ jobs:
           if-no-files-found: error
       - uses: actions/upload-artifact@v7.0.2
         with:
-          name: AccountingApp-win-x64
-          path: artifacts/releases/guide/
+          name: AccountingApp-release-bundle
+          path: |
+            artifacts/ci-release/*.zip
+            artifacts/ci-release/*manifest.json
+            artifacts/ci-release/provenance.json
+            artifacts/ci-release/SHA256SUMS.txt
+            artifacts/ci-release/release-notes.md
+            artifacts/ci-release/verification.json
+            artifacts/ci-release/*.ps1
           if-no-files-found: error
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: AccountingApp-release-bundle
+          path: bundle
+      - name: Verify release assets before draft creation
+        shell: pwsh
+        run: '& .\bundle\Verify-WindowsBundle.ps1 -BundleDirectory bundle -ExpectedVersion ($env:RELEASE_VERSION.Substring(1))'
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+      - name: Create tagged draft release without replacing existing assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release view $env:RELEASE_TAG *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'Release already exists; existing assets were preserved.' }
+          $files = Get-ChildItem bundle -File | Where-Object Name -ne 'release-notes.md' | ForEach-Object FullName
+          gh release create $env:RELEASE_TAG @files --verify-tag --draft --title ('AccountingApp ' + $env:RELEASE_TAG) --notes-file bundle/release-notes.md
+          if ($LASTEXITCODE -ne 0) { throw 'Draft release creation failed.' }

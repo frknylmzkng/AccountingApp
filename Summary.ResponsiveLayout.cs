@@ -79,6 +79,8 @@ internal sealed class SummaryMetricCard : GroupBox
 
 internal sealed class SummaryLeavePanel : GroupBox
 {
+    private ListPager? pager;
+    internal void SetPager(ListPager value) { pager = value; value.Dock = DockStyle.None; Controls.Add(value); PerformLayout(); }
     private readonly DataGridView grid;
     private readonly Label note = new()
     {
@@ -102,7 +104,9 @@ internal sealed class SummaryLeavePanel : GroupBox
         int noteHeight = TextRenderer.MeasureText(note.Text, note.Font, new Size(width, 0), TextFormatFlags.WordBreak).Height;
         note.SetBounds(inset, top, width, noteHeight);
         int gridTop = top + noteHeight + gap;
-        grid.SetBounds(inset, gridTop, width, Math.Max(1, ClientSize.Height - gridTop - inset));
+        int pagerHeight = pager?.GetPreferredSize(new Size(width, 0)).Height ?? 0;
+        grid.SetBounds(inset, gridTop, width, Math.Max(1, ClientSize.Height - gridTop - inset - pagerHeight));
+        pager?.SetBounds(inset, Math.Max(gridTop, ClientSize.Height - inset - pagerHeight), width, pagerHeight);
     }
 }
 

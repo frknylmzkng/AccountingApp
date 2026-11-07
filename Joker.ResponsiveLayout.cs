@@ -6,6 +6,7 @@ public partial class Joker
     {
         base.OnLoad(e);
         MinimumSize = LogicalToDeviceUnits(new Size(560, 480));
+        RefreshEditState();
     }
 }
 

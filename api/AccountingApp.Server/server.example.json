@@ -1,0 +1,12 @@
+{
+  "AllowedHosts": "localhost",
+  "AccountingApi": {
+    "AllowUserLocalDb": false,
+    "DatabaseProfilePath": "",
+    "ListenUrl": "https://localhost:7443",
+    "SessionIdleMinutes": 15,
+    "SessionAbsoluteHours": 8,
+    "MaxSessions": 5000,
+    "MaxSessionsPerUser": 8
+  }
+}

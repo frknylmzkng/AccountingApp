@@ -22,7 +22,7 @@ namespace WinFormsApp2
         internal event EventHandler<LoginSucceededEventArgs>? LoginSucceeded;
 
         public Giris() : this(
-            () => SchemaUpgrade.PrepareAsync(AppDatabase.ConnectionString),
+            DesktopConnection.PrepareAsync,
             (_, _) => Task.FromResult(false)) { useAccountService = true; }
 
         internal Giris(Func<Task> prepareCredentials, Func<string, string, Task<bool>> authenticate)
@@ -31,6 +31,13 @@ namespace WinFormsApp2
             this.authenticate = authenticate;
             InitializeComponent();
             ArrangeLogin();
+            var connection = new LinkLabel { Text = "Bağlantı seçimi…", AutoSize = true, Dock = DockStyle.Bottom, Height = 22 };
+            Controls.Add(connection); connection.BringToFront();
+            connection.LinkClicked += async (_, _) =>
+            {
+                if (busy || !useAccountService) return;
+                if (DesktopConnection.Configure(this)) { credentialsPrepared = false; password_txt.Clear(); await PrepareCredentialsAsync(); }
+            };
             username_txt.PlaceholderText = "Kullanıcı adı";
             password_txt.PlaceholderText = "Şifre";
             AppTheme.Apply(this);
@@ -97,7 +104,7 @@ namespace WinFormsApp2
             {
                 authenticatedUser = useAccountService ? await new AccountService(AppDatabase.ConnectionString).AuthenticateAsync(username.Trim(), password) : null;
                 bool authenticated = useAccountService ? authenticatedUser != null : await authenticate(username.Trim(), password);
-                if (!CanContinue) return false;
+                if (!CanContinue) { authenticatedUser?.Remote?.End(); return false; }
                 password_txt.Clear();
                 if (authenticated)
                     LoginSucceeded?.Invoke(this, new LoginSucceededEventArgs(authenticatedUser ?? new UserSession(username.Trim(), UserRole.Admin)));

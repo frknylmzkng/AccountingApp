@@ -230,6 +230,9 @@
         "type": "Transitive",
         "resolved": "9.0.18",
         "contentHash": "pxuHw/tQXaHMRXEaKzzgpoGO8VeTPIzHbnp0KclXp6js5wPHn7VaqSCa8yRTAsZDcZ2XuIEnXGM2MbRDJFLBog=="
+      },
+      "accountingapp.contracts": {
+        "type": "Project"
       }
     },
     "net10.0-windows7.0/win-x64": {

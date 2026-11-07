@@ -1,5 +1,35 @@
 # Geliştirme ve iyileştirme analizi
 
+30 Ekim 2026, F14: [sürüm/paket/kurulum akışı](SURUMLU_DAGITIM_VE_KURULUM.md) kaynakta düzenlendi. Derleme/paketleme yapıldı; kullanıcının isteğiyle denemeler atlandı. Çalışan API ve canlı veri değiştirilmedi; kararlı sürüm yayımlanmadı.
+
+30 Ekim 2026, F13 masaüstü adımı: [merkezi API istemcisi](MASAUSTU_MERKEZI_API_BAGLANTISI.md) kaynakta eklendi. Oturum/izin/sürüm/ödeme günlüğü korunur; canlı kurulum ve çok cihaz denemesi yapılmadı. Aşağıdaki önceki F13 paragrafı ilk altyapı aşamasını kaydeder.
+
+30 Ekim 2026, F13 ilk aşama: [merkezi Windows HTTPS API altyapısı](MERKEZI_API_ALTYAPISI.md) eklendi. Sunucu mevcut yetki/transaction servislerini kullanır; masaüstü HTTP bağlantısı ve çok cihaz geçişi henüz yapılmadı. Canlı DB/kısayol değiştirilmedi, denemeler atlandı.
+
+30 Ekim 2026, F12 kilit/uyarı bölümü: uygulama boşta kilidi, aynı hesabı yeniden doğrulama ve kaydedilmemiş girişlerin grup bazında takibi eklendi. [Kapsam ve denenmeyen ortamlar](OTOMATIK_KILIT_VE_DEGISIKLIK_UYARISI.md). SQL yükseltmesi gerekmez; denemeler atlandı. Fiziksel yüksek DPI/çoklu monitör doğrulaması ayrı iştir.
+
+30 Ekim 2026, F11: rapor/kapsam/sütun seçimi ve kalıcı günlük nakit kapanışı eklendi. [112 ve kullanım sınırları](SECILEBILIR_RAPOR_VE_KALICI_KAPANIS.md). Eski önizleme ayrıdır; sonraki gün iptali eski kesin kaydı değiştirmez. Canlı DB yükseltilmedi, denemeler atlandı. Revizyon/yeniden açma ve harici değiştirilemez arşiv ayrı işlerdir.
+
+30 Ekim 2026, F10: canlı personel listeleri/ödeme defteri ve finans seçicisi sayfalandı; Genel Durum hesapları SQL'e taşındı. [111 ve ölçüm sınırları](PERSONEL_SAYFALAMA_VE_SQL_OZETLERI.md). Canlı DB yükseltilmedi; denemeler atlandı. Çok derin sayfalar ve diğer tarihçe listeleri için ölçüm/ek sayfalama ayrı işlerdir.
+
+30 Ekim 2026, F09 ilk aşama: manuel hakediş ve diğer gider belgesi, proje maliyeti ve ayrı avans ödemesi kaynakta eklendi. [110, kullanım ve sınırlar](HAKEDIS_AVANS_PROJE_MALIYETI.md). Puantaj/tarife, çift kişi onayı, belge bazlı ödeme tahsisi ve banka mutabakatı ayrı geliştirmelerdir. Denemeler kullanıcı isteğiyle atlandı.
+
+29 Ekim 2026, F08: personel/izin/ödeme/hesap için kayıt bazında eski-yeni JSON, aktör/kalıcı hesap kimliği, UTC zaman, gerekçe ve transaction bağı; uygulamada gerekçe girişi ve yönetici geçmiş ekranı eklendi. [109 ve kapsam sınırları](AYRINTILI_ISLEM_GECMISI.md). Canlı DB yükseltilmedi; denemeler atlandı. Aşağıdaki bulgular tarihsel durumu korur.
+
+29 Ekim 2026, yetki ayrımı: F07'nin ödeme ve kişisel veri dışa aktarma bölümü kaynakta uygulandı. İki bağımsız ek izin, yönetim ekranı, bakiye/rapor/pano/yazdırma korumaları ve oturum iptali eklendi. [108 ve kapsam sınırları](AYRI_ODEME_VE_DISA_AKTARMA_YETKILERI.md). Canlı DB yükseltilmedi; denemeler kullanıcı isteğiyle atlandı, Release derlemesi başarılı. Proje bazlı erişim ve görüntüleme maskelemesi ayrı işlerdir.
+
+29 Ekim 2026, izin geçmişi: F06 tarih değişikliklerinin kaybolması için 107 ve geçmiş sekmesi hazırlandı. [Kapsam ve aktarım sınırları](IZIN_DEGISIKLIK_GECMISI.md). Önceki kayıtların bilinmeyen tarihleri üretilmez; canlı DB bu adımda yükseltilmedi, denemeler atlandı.
+
+29 Ekim 2026, personel geçmişi: F05 kalıcı kimlik, arşivleme/etkinleştirme ve geçmiş ekranı kaynakta uygulandı. [106 yükseltmesi ve sınırlar](PERSONEL_KIMLIGI_VE_ARSIV.md). Gerçek DB yükseltilmedi; testler önceki taleple atlandı.
+
+29 Ekim 2026, yedek kapsamı: F04 için kalıcı SQL veritabanı kimliği + kaynak konumuyla kapsam ayrımı, v2 manifest/SQL başlık doğrulaması ve kapsamlı saklama temizliği eklendi. [Kapsam, eski yedekler ve çalıştırılmayan testler](YEDEK_KIMLIGI_VE_KAPSAM.md). Aşağıdaki kayıtlar önceki durumu açıklar.
+
+29 Ekim 2026, sonraki adım: F03 için TR IBAN doğrulaması, normalize modelin saklanması ve salt okunur eski veri düzeltme listesi eklendi. Kullanıcı isteğiyle denemeler atlandı; yalnızca derleme yapıldı. [Kapsam ve kullanım](PERSONEL_VERI_DOGRULAMA.md). Aşağıdaki tarihlendirilmiş kayıtlar önceki durumu korur.
+
+29 Ekim 2026: geri yükleme sonrası şema kontrolü hatasında eski oturumun canlanması için yerel koruma eklendi. Oturum nesilleri normal erişimden önce yenilenir; yenileme başarısızsa veritabanı OFFLINE tutulur. [Kapsam, sınırlar ve regresyon senaryoları](GERI_YUKLEME_OTURUM_KORUMASI.md). IBAN doğrulaması sıradaki iştir.
+
+28 Ekim 2026 güncel incelemesi: kullanıcı hedefi vardiya ve proje bazlı ekip takibidir. İzole kontrollerde ödeme başlatmada eski personel seçimi, restore sonrası şema hatasında eski oturumun yeniden geçerliliği ve IBAN/normalize kayıt sorunları doğrulandı. Ödeme seçimi için yerel koruma eklendi; [düzeltme ve deneme adımları](ODEME_SECIM_SURUM_KORUMASI.md). Restore hata güvenliği ve IBAN doğrulaması henüz düzeltilmedi. Güncel belgeler: [kod ve kalan sorunlar](PROJE_DURUM_ANALIZI_2026_10_28.md), [GitHub karşılaştırması ve saha problemleri](GITHUB_VE_SAHA_ANALIZI_2026_10_28.md), [aşamalı geliştirme yol haritası](GELISTIRME_YOL_HARITASI_2026_10_28.md). Aşağıdaki 26/24 Ekim kayıtları tarihsel durumdur.
+
 26 Ekim 2026 güncel incelemesinin izleyen durumu: personel silme, hesap hedefi ve izin kaydetme için eski seçim/sürüm korumaları tamamlandı. Ardından ödeme fişi ve günlük kapanışın eski ekran verisinden üretilmesi düzeltildi; **509 test başarılı**. [Güncel rapor verisi ve deneme adımları](FIS_VE_KAPANIS_GUNCEL_VERI.md). Güncel inceleme kaydı: `artifacts/analysis/review-20261026/PROJE_ANALIZI.md`; onun 5. bulgusu olan başarısız yedek aynalamasının yeniden denenmesi de tamamlandı; 532 test başarılı. [Aynalama düzeltmesi](YEDEK_AYNALAMA_YENIDEN_DENEME.md). Sıradaki bulgu IBAN doğrulamasıdır. Aşağıdaki 24 Ekim analizi tarihsel kayıttır.
 
 Tarih: 24 Ekim 2026. İncelenen kaynak sürümü: `6d4c451`.

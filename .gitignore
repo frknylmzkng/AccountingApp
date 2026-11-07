@@ -4,6 +4,10 @@
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
 # User-specific files
+/api/**/server.json
+/api/**/database-profile.json
+*.key
+*.pem
 *.rsuser
 *.suo
 *.user
@@ -368,3 +372,22 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Encrypted archives and recovery key material are private.
+*.abk
+*.abkey
+*.dpapi
+*.sealing
+*.copying
+*.bak.backup.json
+*.bak.verified
+*.abk.verified
+*.mirror.json
+backup-vault/
+
+# The operator tool is source code, not a Visual Studio Backup directory.
+!/tools/BackupRecovery/
+/tools/BackupRecovery/*
+!/tools/BackupRecovery/Program.cs
+!/tools/BackupRecovery/AccountingApp.BackupRecovery.csproj
+!/tools/BackupRecovery/packages.lock.json

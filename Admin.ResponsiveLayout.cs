@@ -6,6 +6,7 @@ public partial class Admin
     {
         base.OnLoad(e);
         MinimumSize = LogicalToDeviceUnits(new Size(560, 480));
+        RefreshEditState();
     }
 }
 
@@ -18,7 +19,7 @@ internal sealed class AdminCreateCard : GroupBox
     internal AdminCreateCard(TextBox username, TextBox password, ComboBox role, Button add)
     {
         fields = [username, password, role]; this.add = add;
-        labels = [new() { Text = "Kullanıcı adı:" }, new() { Text = "Parola:" }, new() { Text = "Yetki:" }];
+        labels = [new() { Text = "Kullanıcı adı:" }, new() { Text = "Parola:" }, new() { Text = "Rol:" }];
         SuspendLayout(); Name = "adminCreate"; Text = "Yeni hesap"; TabStop = false; TabIndex = 0;
         for (int i = 0; i < fields.Length; i++)
         {
@@ -59,7 +60,7 @@ internal sealed class AdminActionsCard : GroupBox
     private readonly Button[] actions;
     private readonly Label note = new()
     {
-        Name = "adminActionNote", Text = "Pasife alma, hesabın açık oturumlarını sonlandırır. Kendi parolanız için Dosya menüsünü kullanın.",
+        Name = "adminActionNote", Text = "Ödeme ve dışa aktarma için Ek yetkiler'i kullanın. Personel eşlemesi kimlik ve puantaj görev ayrımı içindir; erişim yetkisi vermez. Değişiklik açık oturumları sonlandırır.",
         AutoSize = false, TabStop = false
     };
 

@@ -61,9 +61,9 @@ public class GuidePureTests
     [Test, Category("Backup")]
     public void RetentionOnlyRemovesOwnBackupsAndKeepsNewestFourteen()
     {
-        string prefix = BackupService.Prefix("GuideTest");
-        for (int i = 0; i < 18; i++) File.WriteAllText(Path.Combine(directory, prefix + i.ToString("D4") + ".bak"), "test");
-        string unrelated = Path.Combine(directory, BackupService.Prefix("OtherDB") + "0000.bak"); File.WriteAllText(unrelated, "other");
+        string prefix = BackupFixtures.Scope("GuideTest").Prefix;
+        for (int i = 0; i < 18; i++) BackupFixtures.Write(Path.Combine(directory, prefix + i.ToString("D4") + ".bak"), BackupFixtures.Scope("GuideTest"), "test");
+        string unrelated = Path.Combine(directory, BackupFixtures.Scope("OtherDB").Prefix + "0000.bak"); File.WriteAllText(unrelated, "other");
         File.WriteAllText(Path.Combine(directory, "notes.txt"), "keep"); BackupService.Prune(directory, prefix, 14);
         Assert.That(Directory.GetFiles(directory, prefix + "*.bak"), Has.Length.EqualTo(14)); Assert.That(File.Exists(unrelated), Is.True);
         Assert.That(File.Exists(Path.Combine(directory, prefix + "0003.bak")), Is.False); Assert.That(File.Exists(Path.Combine(directory, prefix + "0017.bak")), Is.True);
@@ -72,8 +72,8 @@ public class GuidePureTests
     [Test, Category("Backup")]
     public void RetentionPreservesSelectedSourceAndVerificationMarker()
     {
-        string prefix = BackupService.Prefix("GuideTest");
-        for (int i = 0; i < 18; i++) File.WriteAllText(Path.Combine(directory, prefix + i.ToString("D4") + ".bak"), "test");
+        string prefix = BackupFixtures.Scope("GuideTest").Prefix;
+        for (int i = 0; i < 18; i++) BackupFixtures.Write(Path.Combine(directory, prefix + i.ToString("D4") + ".bak"), BackupFixtures.Scope("GuideTest"), "test");
         string selected = Path.Combine(directory, prefix + "0000.bak");
         File.WriteAllText(selected + ".verified", "verified");
         string selectedSpelling = Path.Combine(directory, ".", Path.GetFileName(selected)).ToUpperInvariant();

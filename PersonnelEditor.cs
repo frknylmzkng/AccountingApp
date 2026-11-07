@@ -23,7 +23,7 @@ internal sealed class PersonnelEditor : GroupBox
             fields[i].AutoSize = true;
             Controls.Add(labels[i]); Controls.Add(fields[i]);
         }
-        string[] commands = ["&Ekle", "&Düzenle", "&Sil", "Alanları &temizle"];
+        string[] commands = ["&Ekle", "&Düzenle", "&Arşivle", "Alanları &temizle"];
         for (int i = 0; i < actions.Length; i++)
         {
             actions[i].Text = commands[i]; actions[i].AutoSize = false; actions[i].Dock = DockStyle.None;

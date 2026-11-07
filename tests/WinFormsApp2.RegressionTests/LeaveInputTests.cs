@@ -37,8 +37,8 @@ public class LeaveInputTests
     public void JokerCannotSilentlyIgnoreAnExplicitLeave()
     {
         var store = new PersonnelStore("deliberately invalid connection string");
-        var person = new PersonnelDetails(11111111111L, "Ada", "Test", "TR000000000000000000000000", 100m);
+        var person = new PersonnelDetails(11111111111L, "Ada", "Test", "TR470000100100000350930001", 100m);
         var leave = new LeavePeriod(DateTime.Today, DateTime.Today);
-        Assert.Throws<ArgumentException>(() => store.Add(PersonnelGroup.Joker, person, leave));
+        Assert.Throws<ArgumentException>(() => store.Add(PersonnelGroup.Joker, person, leave, employmentStart: new DateTime(2000, 1, 1)));
     }
 }

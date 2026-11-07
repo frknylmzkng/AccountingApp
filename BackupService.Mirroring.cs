@@ -15,10 +15,12 @@ internal sealed record BackupMirrorState(string Destination, string? SourceHash,
 
 internal sealed partial class BackupService
 {
-    private static string? LatestVerified(string folder, string prefix, DateTime? since = null) => !Directory.Exists(folder) ? null :
-        Directory.EnumerateFiles(folder, prefix + "*.bak")
+    private static string? LatestVerified(string folder, BackupScope scope, DateTime? since = null) => !Directory.Exists(folder) ? null :
+        Directory.EnumerateFiles(folder, scope.Prefix + "*.bak.abk")
             .Where(p => File.Exists(p + ".verified") && (!since.HasValue || File.GetLastWriteTimeUtc(p + ".verified") > since.Value))
-            .OrderByDescending(p => File.GetLastWriteTimeUtc(p + ".verified")).ThenByDescending(Path.GetFileName, StringComparer.Ordinal).FirstOrDefault();
+            .OrderByDescending(p => File.GetLastWriteTimeUtc(p + ".verified"))
+            .ThenByDescending(Path.GetFileName, StringComparer.Ordinal)
+            .FirstOrDefault(p => scope.Owns(p));
 
     private static BackupMirrorState? ReadMirrorState(string path)
     {
@@ -35,9 +37,11 @@ internal sealed partial class BackupService
     }
 
     // Caller holds Gate. A completed copy is accepted only while both files still match.
-    private async Task<bool> MirrorCoreAsync(string path, string mirror, string name, CancellationToken token)
+    private async Task<bool> MirrorCoreAsync(string path, string mirror, BackupScope scope, CancellationToken token)
     {
+        if(path.EndsWith(".abk",StringComparison.OrdinalIgnoreCase))return await MirrorEncryptedAsync(path,mirror,scope,token).ConfigureAwait(false);
         path = Path.GetFullPath(path);
+        if (!scope.Owns(path)) throw new InvalidOperationException("Aynalama kaynağının kimliği/kapsamı doğrulanamadı.");
         string destination = Path.TrimEndingDirectorySeparator(Path.GetFullPath(mirror));
         string target = Path.GetFullPath(Path.Combine(destination, Path.GetFileName(path)));
         string? temporary = null;
@@ -51,11 +55,6 @@ internal sealed partial class BackupService
             var previous = ReadMirrorState(path);
             if (previous != null && string.Equals(previous.Destination, destination, StringComparison.OrdinalIgnoreCase))
                 pending = pending with { SourceHash = previous.SourceHash, CompletedUtc = previous.CompletedUtc };
-            if (previous?.CompletedUtc != null && previous.Failure == null && previous.SourceHash == hash &&
-                string.Equals(previous.Destination, destination, StringComparison.OrdinalIgnoreCase) && File.Exists(target) &&
-                await HashAsync(target, token).ConfigureAwait(false) == hash) return false;
-
-            WriteMirrorState(path, pending);
             string verifiedHash = hash;
             // A legacy .verified marker is not enough when retrying: verify the source again.
             await using (var master = new SqlConnection(Master()))
@@ -65,10 +64,18 @@ internal sealed partial class BackupService
                 await verify.ExecuteNonQueryAsync(token).ConfigureAwait(false);
                 using var header = new SqlCommand($"RESTORE HEADERONLY FROM DISK={Literal(path)}", master);
                 var headers = await header.TableAsync(token).ConfigureAwait(false);
-                if (headers.Rows.Count != 1 || !string.Equals(headers.Rows[0]["DatabaseName"].ToString(), name, StringComparison.OrdinalIgnoreCase) || Convert.ToInt32(headers.Rows[0]["BackupType"]) != 1)
-                    throw new InvalidOperationException("Aynalama kaynağı bu veritabanının tam yedeği değil.");
+                var row = scope.ValidateHeader(headers);
+                if (BackupScope.ReadOwned(path, scope.Prefix)?.BackupSetId != (Guid)row["BackupSetGUID"])
+                    throw new InvalidOperationException("Aynalama manifesti SQL yedek kümesiyle eşleşmiyor.");
             }
             sourceVerified = true;
+            if (previous?.CompletedUtc != null && previous.Failure == null && previous.SourceHash == hash &&
+                string.Equals(previous.Destination, destination, StringComparison.OrdinalIgnoreCase) && scope.Owns(target) &&
+                await HashAsync(target, token).ConfigureAwait(false) == hash) return false;
+            WriteMirrorState(path, pending);
+            if (!string.Equals(path, target, StringComparison.OrdinalIgnoreCase) && File.Exists(target) &&
+                !scope.Owns(target, verifyPayload: false) && await HashAsync(target, token).ConfigureAwait(false) != hash)
+                throw new InvalidOperationException("Aynalama hedefinde bu kapsama ait olduğu doğrulanamayan bir dosya var; üzerine yazılmadı.");
             Directory.CreateDirectory(destination);
             // Hold the source against concurrent writers/deletion throughout hashing and copying.
             await using (var source = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true))
@@ -87,9 +94,14 @@ internal sealed partial class BackupService
                     token.ThrowIfCancellationRequested(); File.Move(temporary, target, overwrite: true); temporary = null;
                 }
             }
+            if (!string.Equals(path, target, StringComparison.OrdinalIgnoreCase))
+            {
+                AtomicFile.Write(target + BackupScope.ManifestSuffix, await File.ReadAllBytesAsync(path + BackupScope.ManifestSuffix, token).ConfigureAwait(false), durable: true);
+                AtomicFile.Write(target + ".verified", Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("O")), durable: true);
+            }
             // A retry may copy an older backup into a folder containing newer files.
             // Retention must not immediately delete the copy we just published.
-            Prune(destination, Prefix(name), 14, target);
+            Prune(destination, scope.Prefix, 14, target);
             await RecordAuditAsync("Backup.Mirror", token).ConfigureAwait(false);
             WriteMirrorState(path, pending with { SourceHash = hash, CompletedUtc = DateTime.UtcNow, Failure = null });
             return true;
@@ -114,14 +126,17 @@ internal sealed partial class BackupService
 
     public async Task RetryMirrorAsync(string folder, string mirror, CancellationToken token = default)
     {
-        user.DemandAdmin(); if (string.IsNullOrWhiteSpace(mirror)) throw new ArgumentException("Önce aynalama klasörünü seçin.");
+        user.DemandAdmin();
         await Gate.WaitAsync(token).ConfigureAwait(false);
         try
         {
             await AccountAuthorization.ValidateAsync(connectionString, user, AccountAccess.Admin, token).ConfigureAwait(false);
             string name = await CatalogAsync(token).ConfigureAwait(false); ValidateCatalog(name);
-            string path = LatestVerified(folder, Prefix(name)) ?? throw new InvalidOperationException("Önce doğrulanmış bir yerel yedek oluşturun.");
-            await MirrorCoreAsync(path, mirror, name, token).ConfigureAwait(false);
+            var scope = await BackupScope.ReadAsync(connectionString, token).ConfigureAwait(false);
+            if(BackupVault.Policy(scope.Key).Mirror is{Length:>0} configuredMirror)mirror=configuredMirror;
+            if(string.IsNullOrWhiteSpace(mirror))throw new ArgumentException("Önce aynalama klasörünü seçin.");
+            string path = LatestVerified(folder, scope) ?? throw new InvalidOperationException("Önce bu veritabanı kapsamına ait doğrulanmış bir yerel yedek oluşturun.");
+            await MirrorCoreAsync(path, mirror, scope, token).ConfigureAwait(false);
         }
         finally { Gate.Release(); }
     }
@@ -130,9 +145,12 @@ internal sealed partial class BackupService
     {
         await AccountAuthorization.ValidateAsync(connectionString, user, AccountAccess.Admin, token).ConfigureAwait(false);
         string name = await CatalogAsync(token).ConfigureAwait(false); ValidateCatalog(name);
-        string? path = LatestVerified(folder, Prefix(name));
-        if (path == null) return "Doğrulanmış yerel yedek bulunamadı.";
-        string text = $"Son doğrulanmış yerel yedek: {File.GetLastWriteTimeUtc(path + ".verified").ToLocalTime():dd.MM.yyyy HH:mm}\n{path}";
+        var scope = await BackupScope.ReadAsync(connectionString, token).ConfigureAwait(false);
+        if(BackupVault.Policy(scope.Key).Mirror is{Length:>0} configuredMirror)mirror=configuredMirror;
+        string? path = LatestVerified(folder, scope);
+        string identity = $"Yedek kapsamı: {scope.Key} · Veritabanı kimliği: {scope.FamilyId:D}";
+        if (path == null) return identity + "\nBu kapsama ait doğrulanmış yerel yedek bulunamadı. Eski kimliksiz veya başka kapsamlı yedekler kullanılmaz ve temizlenmez.";
+        string text = identity + $"\nSon doğrulanmış yerel yedek: {File.GetLastWriteTimeUtc(path + ".verified").ToLocalTime():dd.MM.yyyy HH:mm}\n{path}";
         if (string.IsNullOrWhiteSpace(mirror)) return text + "\nHarici aynalama seçilmemiş.";
         var state = ReadMirrorState(path);
         string destination = Path.TrimEndingDirectorySeparator(Path.GetFullPath(mirror));

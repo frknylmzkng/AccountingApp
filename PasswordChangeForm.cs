@@ -12,12 +12,13 @@ internal sealed partial class PasswordChangeForm : SessionForm
     {
         var save = new Button { Text = "Parolayı değiştir" };
         ArrangePasswordChange(save); AcceptButton = save;
+        TrackChanges("Parola", current, next, repeat);
         Load += (_, _) => notice.Text = Session?.MustChangePassword == true ? "Geçici parolayla giriş yaptınız. Diğer ekranlara geçmeden yeni parolanızı belirleyin." : "Parola değişince bütün açık oturumlarınız sona erecek. Yeni parolanızla yeniden giriş yapın.";
         save.Click += async (_, _) =>
         {
             try
             {
-                bool done = await RunOperationAsync(token => new AccountService(AppDatabase.ConnectionString).ChangePasswordAsync(User, current.Text, next.Text, repeat.Text, token));
+                bool done = await RunChangeOperationAsync(token => new AccountService(AppDatabase.ConnectionString).ChangePasswordAsync(User, current.Text, next.Text, repeat.Text, token), savedGroup: "Parola");
                 if (done && !IsDisposed) RequestLogout("Parolanız değiştirildi. Yeni parolanızla yeniden giriş yapın.");
             }
             finally { ClearSecrets(); }

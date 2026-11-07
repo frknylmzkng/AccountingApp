@@ -9,10 +9,12 @@ namespace WinFormsApp2
 
         public PersonnelStore(string connectionString) => this.connectionString = connectionString;
 
-        public void Add(PersonnelGroup group, PersonnelDetails person, LeavePeriod? leave = null)
+        public void Add(PersonnelGroup group, PersonnelDetails person, LeavePeriod? leave = null, DateTime? employmentStart = null)
         {
             string table = GetTable(group);
             ValidateLeave(group, leave);
+            person = PersonnelInput.Normalize(person);
+            DateTime start = EmploymentService.Day(employmentStart) ?? throw new ArgumentException("İşe giriş tarihi gerekiyor.");
             DatabaseTransaction.Run(connectionString, (connection, transaction) =>
             {
                 using var check = new SqlCommand(@"
@@ -30,6 +32,10 @@ namespace WinFormsApp2
                     VALUES (@TC, @AD, @SOYAD, @IBAN, @PARA)", connection, transaction);
                 AddPersonParameters(insert, person);
                 insert.ExecuteNonQuery();
+                using var initial = new SqlCommand($"UPDATE E SET StartDate=@start FROM dbo.EmploymentPeriods E JOIN {table} C ON C.CurrentEmploymentId=E.EmploymentId WHERE C.TC=@tc AND E.IsLegacy=0 AND E.StartDate IS NULL", connection, transaction);
+                initial.Parameters.Add("@start", SqlDbType.Date).Value = start;
+                initial.Parameters.Add("@tc", SqlDbType.BigInt).Value = person.Tc;
+                if (initial.ExecuteNonQuery() != 1) throw new InvalidOperationException("İlk çalışma dönemi kaydedilemedi.");
 
                 if (leave != null)
                     InsertLeave(connection, transaction, person.Tc, leave);
@@ -40,12 +46,13 @@ namespace WinFormsApp2
         {
             byte[] version = PersonnelConcurrency.RequireVersion(expectedVersion);
             string table = GetTable(group);
+            person = PersonnelInput.Normalize(person);
             DatabaseTransaction.Run(connectionString, (connection, transaction) =>
             {
                 EnsureSingleRecord(connection, transaction, table, person.Tc);
                 using var update = new SqlCommand($@"
                     UPDATE {table} SET AD = @AD, SOYAD = @SOYAD, IBAN = @IBAN, PARA = @PARA
-                    WHERE TC = @TC AND RecordVersion = @version", connection, transaction);
+                    WHERE TC = @TC AND ArchivedUtc IS NULL AND RecordVersion = @version", connection, transaction);
                 AddPersonParameters(update, person);
                 update.Parameters.Add("@version", SqlDbType.Binary, 8).Value = version;
                 if (update.ExecuteNonQuery() != 1) throw new InvalidOperationException(PersonnelConcurrency.ConflictMessage);
@@ -61,31 +68,27 @@ namespace WinFormsApp2
         private async Task SaveLeaveCoreAsync(LeaveTarget selected, LeavePeriod leave)
         {
             await using var work = await SqlUnitOfWork.OpenAsync(connectionString, CancellationToken.None).ConfigureAwait(false);
-            await new PersonnelRepository(work).SaveLeaveAsync(selected, leave, CancellationToken.None).ConfigureAwait(false);
+            await new PersonnelRepository(work).SaveLeaveAsync(selected, leave, CancellationToken.None, "legacy-store").ConfigureAwait(false);
             await work.CommitAsync(CancellationToken.None).ConfigureAwait(false);
         }
-        public void Delete(PersonnelGroup group, long tc, byte[]? expectedVersion)
+        public void Delete(PersonnelGroup group, long tc, byte[]? expectedVersion, DateTime? employmentEnd = null)
+            => ArchiveCoreAsync(group, tc, PersonnelConcurrency.RequireVersion(expectedVersion), employmentEnd).GetAwaiter().GetResult();
+        private async Task ArchiveCoreAsync(PersonnelGroup group, long tc, byte[] version, DateTime? end)
         {
-            byte[] version = PersonnelConcurrency.RequireVersion(expectedVersion);
-            string table = GetTable(group);
-            DatabaseTransaction.Run(connectionString, (connection, transaction) =>
-            {
-                EnsureSingleRecord(connection, transaction, table, tc, version);
-                if (group == PersonnelGroup.General)
-                {
-                    using var deleteLeave = new SqlCommand("DELETE FROM izinler WHERE TC = @TC",
-                        connection, transaction);
-                    deleteLeave.Parameters.Add("@TC", SqlDbType.BigInt).Value = tc;
-                    deleteLeave.ExecuteNonQuery();
-                }
-
-                // The table comes only from the requested enum, never from a displayed value.
-                using var delete = new SqlCommand($"DELETE FROM {table} WHERE TC = @TC AND RecordVersion = @version",
-                    connection, transaction);
-                delete.Parameters.Add("@TC", SqlDbType.BigInt).Value = tc;
-                delete.Parameters.Add("@version", SqlDbType.Binary, 8).Value = version;
-                if (delete.ExecuteNonQuery() != 1) throw new InvalidOperationException(PersonnelConcurrency.ConflictMessage);
-            });
+            await using var work = await SqlUnitOfWork.OpenAsync(connectionString, CancellationToken.None).ConfigureAwait(false);
+            var repo = new PersonnelRepository(work);
+            await repo.LockPersonAsync(group, tc, CancellationToken.None, version).ConfigureAwait(false);
+            Guid person = await repo.IdentityAsync(group, tc, CancellationToken.None).ConfigureAwait(false);
+            await EmploymentService.CloseAsync(work, group, person, end, CancellationToken.None).ConfigureAwait(false);
+            using var archive = work.Command($"UPDATE {GetTable(group)} SET ArchivedUtc=SYSUTCDATETIME(),ArchivedBy=N'legacy-store' WHERE TC=@TC AND RecordVersion=@version AND ArchivedUtc IS NULL");
+            archive.Tc(tc); archive.Parameters.Add("@version", SqlDbType.Binary, 8).Value = version;
+            if (await archive.ExecuteNonQueryAsync().ConfigureAwait(false) != 1) throw new InvalidOperationException(PersonnelConcurrency.ConflictMessage);
+            using var history = work.Command($@"INSERT dbo.PersonnelArchiveEvents(PersonId,PersonnelGroup,Action,Actor,Balance)
+                SELECT PersonId,@group,N'Archive',N'legacy-store',PARA FROM {GetTable(group)} WHERE TC=@tc;
+                INSERT dbo.PaymentLedger(PersonId,TC,PersonnelGroup,Delta,Kind,Actor)
+                SELECT PersonId,TC,@group,0,N'Closure',N'legacy-store' FROM {GetTable(group)} WHERE TC=@tc;");
+            history.Tc(tc); history.Parameters.Add("@group", SqlDbType.Int).Value = (int)group;
+            await history.ExecuteNonQueryAsync().ConfigureAwait(false); await work.CommitAsync(CancellationToken.None).ConfigureAwait(false);
         }
 
         private static string GetTable(PersonnelGroup group) => group switch
@@ -108,7 +111,7 @@ namespace WinFormsApp2
             string table, long tc, byte[]? expectedVersion = null)
         {
             using var check = new SqlCommand(
-                $"SELECT COUNT(*) FROM {table} WITH (UPDLOCK, HOLDLOCK) WHERE TC = @TC" + (expectedVersion == null ? "" : " AND RecordVersion = @version"),
+                $"SELECT COUNT(*) FROM {table} WITH (UPDLOCK, HOLDLOCK) WHERE TC = @TC AND ArchivedUtc IS NULL" + (expectedVersion == null ? "" : " AND RecordVersion = @version"),
                 connection, transaction);
             check.Parameters.Add("@TC", SqlDbType.BigInt).Value = tc;
             if (expectedVersion != null) check.Parameters.Add("@version", SqlDbType.Binary, 8).Value = expectedVersion;
@@ -131,8 +134,8 @@ namespace WinFormsApp2
             long tc, LeavePeriod leave)
         {
             using var insert = new SqlCommand(@"
-                INSERT INTO izinler (TC, IZINBASLANGIC, IZINBITIS)
-                VALUES (@TC, @BASLANGIC, @BITIS)", connection, transaction);
+                INSERT INTO izinler (PersonId, EmploymentId, TC, IZINBASLANGIC, IZINBITIS, LastChangedBy)
+                SELECT PersonId, CurrentEmploymentId, @TC, @BASLANGIC, @BITIS, N'legacy-store' FROM dbo.Calisan WHERE TC=@TC AND ArchivedUtc IS NULL", connection, transaction);
             AddLeaveParameters(insert, tc, leave);
             insert.ExecuteNonQuery();
         }

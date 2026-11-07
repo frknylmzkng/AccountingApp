@@ -2,11 +2,11 @@ namespace WinFormsApp2;
 
 public partial class Admin
 {
-    private void ArrangeAdmin(Button deactivate, Button activate, Button reset)
+    private void ArrangeAdmin(Button deactivate, Button activate, Button reset, Button permissions, Button personLink)
     {
         SuspendLayout();
         // Reuse the guarded account actions and original bound records.
-        Control[] retained = [txtUsername, txtPassword, role, ekle_btn, sil_btn, deactivate, activate, reset, adminView];
+        Control[] retained = [txtUsername, txtPassword, role, ekle_btn, sil_btn, deactivate, activate, reset, permissions, personLink, adminView];
         foreach (var control in retained) control.Parent?.Controls.Remove(control);
         var discarded = Controls.Cast<Control>().ToArray(); Controls.Clear();
         foreach (var control in discarded) control.Dispose();
@@ -20,7 +20,7 @@ public partial class Admin
         var create = new AdminCreateCard(txtUsername, txtPassword, role, ekle_btn);
         activate.Name = "adminActivate"; deactivate.Name = "adminDeactivate"; reset.Name = "adminResetPassword";
         sil_btn.Text = "Hesabı &sil";
-        var selected = new AdminActionsCard([activate, deactivate, reset, sil_btn]);
+        var selected = new AdminActionsCard([activate, deactivate, reset, sil_btn, permissions, personLink]);
         var list = new GroupBox { Name = "adminRecords", Text = "Hesap listesi — işlem yapmak için bir satır seçin", Padding = new Padding(8, 20, 8, 8), TabIndex = 2 };
         adminView.Dock = DockStyle.Fill; adminView.RowHeadersWidth = 28;
         adminView.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
@@ -28,8 +28,9 @@ public partial class Admin
         {
             var (caption, width) = e.Column.DataPropertyName switch
             {
-                "username" => ("Kullanıcı adı", 220), "RoleName" => ("Yetki", 170), "IsActive" => ("Etkin", 80),
+                "username" => ("Kullanıcı adı", 220), "RoleName" => ("Rol", 170), "IsActive" => ("Etkin", 80),
                 "MustChangePassword" => ("Parola yenileme gerekli", 210), "PasswordResetExpiresUtc" => ("Geçici parola sonu (UTC)", 230),
+                "CanPay" => ("Ödeme / bakiye", 130), "CanExportPersonalData" => ("Dışa aktarma / yazdırma", 180),
                 _ => (e.Column.HeaderText, 100)
             };
             e.Column.HeaderText = caption; e.Column.MinimumWidth = adminView.LogicalToDeviceUnits(width); e.Column.FillWeight = width;

@@ -37,7 +37,11 @@ namespace WinFormsApp2
             TryWrite(logDirectory ?? Path.Combine(AppContext.BaseDirectory, "logs"), "login-errors.log",
                 string.Join(Environment.NewLine, details) + Environment.NewLine);
 
-            string message = exception is DatabaseConfigurationException configurationError
+            string message = exception is System.Net.Http.HttpRequestException or TaskCanceledException
+                ? "Merkezi sunucuya ulaşılamadı. HTTPS adresini, sunucunun çalıştığını ve sertifika güvenini kontrol edin. Yerel veritabanına geçilmedi."
+                : exception is InvalidOperationException apiError && UserPreferences.Load().UseCentralApi
+                ? apiError.Message
+                : exception is DatabaseConfigurationException configurationError
                 ? configurationError.Message
                 : exception is LocalDbStartupException startupError
                 ? startupError.Message

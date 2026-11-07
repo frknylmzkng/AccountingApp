@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 
 namespace WinFormsApp2;
 
-internal enum AccountAccess { Read, Edit, Admin, ChangePassword }
+internal enum AccountAccess { Read, Edit, Admin, ChangePassword, Pay, ExportPersonalData, GlobalRead, ViewSalary, ViewIban, FullDataExport }
 internal sealed class SessionRevokedException() : UnauthorizedAccessException(Notice)
 {
     internal const string Notice = "Hesabınız veya yetkiniz değiştiği için oturumunuz sona erdi. Yeniden giriş yapın.";
@@ -15,26 +15,38 @@ internal static class AccountAuthorization
     // to finish, and no new write can rely on an old in-memory role afterwards.
     internal static async Task DemandAsync(IUnitOfWork work, UserSession user, AccountAccess access, CancellationToken token)
     {
+        if (access == AccountAccess.ViewSalary) user.DemandViewSalary();
+        if (access == AccountAccess.ViewIban) user.DemandViewIban();
+        if (access == AccountAccess.FullDataExport) user.DemandFullDataExport();
         if (access == AccountAccess.Edit) user.DemandEdit();
         if (access == AccountAccess.Admin) user.DemandAdmin();
+        if (access == AccountAccess.Pay) user.DemandPay();
+        if (access == AccountAccess.ExportPersonalData) user.DemandExportPersonalData();
+        if (access == AccountAccess.GlobalRead) user.DemandGlobalRead();
         if (user.SecurityVersion is not { Length: 8 } || user.SecurityEpoch == Guid.Empty) throw new SessionRevokedException();
         byte[] expected = user.SecurityVersion.ToArray();
         using var cmd = work.Command(@"SELECT TOP(2) RoleName,IsActive,SessionVersion,SessionEpoch,MustChangePassword,
-            CASE WHEN PasswordResetExpiresUtc>SYSUTCDATETIME() THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END ResetValid
+            CASE WHEN PasswordResetExpiresUtc>SYSUTCDATETIME() THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END ResetValid,
+            CanPay,CanExportPersonalData,AccountId,CanViewSalary,CanViewIban
             FROM dbo.admin WITH(HOLDLOCK) WHERE username=@name");
         cmd.Text("@name", user.Username);
         using var reader = await cmd.ExecuteReaderAsync(token).ConfigureAwait(false);
         if (!await reader.ReadAsync(token).ConfigureAwait(false) || !reader.GetBoolean(1) ||
             reader.GetString(0) != user.Role.ToString() || reader.IsDBNull(2) ||
             !CryptographicOperations.FixedTimeEquals(expected, reader.GetFieldValue<byte[]>(2)) ||
-            reader.GetGuid(3) != user.SecurityEpoch) throw new SessionRevokedException();
+            reader.GetGuid(3) != user.SecurityEpoch || reader.GetBoolean(6) != user.PaymentGranted ||
+            reader.GetBoolean(7) != user.PersonalDataExportGranted || reader.GetBoolean(9) != user.SalaryViewGranted || reader.GetBoolean(10) != user.IbanViewGranted) throw new SessionRevokedException();
         bool mustChange = reader.GetBoolean(4);
         if (mustChange != user.MustChangePassword || (mustChange && !reader.GetBoolean(5))) throw new SessionRevokedException();
         if (mustChange && access != AccountAccess.ChangePassword) throw new PasswordChangeRequiredException();
+        Guid accountId = reader.GetGuid(8);
         if (await reader.ReadAsync(token).ConfigureAwait(false)) throw new SessionRevokedException();
+        await reader.DisposeAsync().ConfigureAwait(false);
+        await AuditContext.AuthorizeAsync(work, user, accountId, token).ConfigureAwait(false);
     }
     internal static async Task ValidateAsync(string connectionString, UserSession user, AccountAccess access, CancellationToken token)
     {
+        if (DesktopConnection.IsRemote(connectionString)) { await RemoteApi.For(connectionString, user).ValidateAsync(access, token).ConfigureAwait(false); return; }
         await using var work = await SqlUnitOfWork.OpenAsync(connectionString, token).ConfigureAwait(false);
         await DemandAsync(work, user, access, token).ConfigureAwait(false);
         await work.CommitAsync(token).ConfigureAwait(false);

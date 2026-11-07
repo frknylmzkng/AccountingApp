@@ -113,9 +113,9 @@ public partial class GuideDatabaseTests
     {
         var paths = MirrorFolders(); var service = new BackupService(connection, admin); string local = await service.BackupAsync(paths.Local, paths.Mirror);
         string target = Path.Combine(paths.Mirror, Path.GetFileName(local)), hash = Digest(target); File.WriteAllText(local, "corrupt SQL backup");
-        await Assert.ThrowsAsync<SqlException>(() => service.RetryMirrorAsync(paths.Local, paths.Mirror));
-        Assert.That(Digest(target), Is.EqualTo(hash)); Assert.That(MirrorState(local).Failure, Is.EqualTo("SourceVerificationFailed"));
-        Assert.That(await service.StatusAsync(paths.Local, paths.Mirror), Does.Contain("yeni yerel yedek oluşturun"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.RetryMirrorAsync(paths.Local, paths.Mirror));
+        Assert.That(Digest(target), Is.EqualTo(hash)); Assert.That(MirrorState(local).Failure, Is.Null);
+        Assert.That(await service.StatusAsync(paths.Local, paths.Mirror), Does.Contain("yerel yedek bulunamadı"));
     }
     [Test, Category("Backup")]
     public async Task MirrorAuditFailureIsPendingAndRetryDoesNotDuplicateLocalBackup()
@@ -179,10 +179,10 @@ public partial class GuideDatabaseTests
     public async Task StatusReadDoesNotCopyBackupsOrWriteAudit()
     {
         var paths = MirrorFolders(); var service = new BackupService(connection, admin); string local = await service.BackupAsync(paths.Local);
-        int audit = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"));
+        int audit = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"));
         Assert.That(await service.StatusAsync(paths.Local, paths.Mirror), Does.Contain("Harici kopya bekliyor"));
         Assert.That(Directory.Exists(paths.Mirror), Is.False); Assert.That(File.Exists(local + ".mirror.json"), Is.False);
-        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"), Is.EqualTo(audit));
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"), Is.EqualTo(audit));
     }
     [Test, Category("Backup")]
     public async Task RepeatedUnavailableMirrorChecksKeepOneVerifiedLocalBackup()
@@ -203,7 +203,7 @@ public partial class GuideDatabaseTests
     {
         var paths = MirrorFolders(); var service = new BackupService(connection, admin); string local = await service.BackupAsync(paths.Local);
         Directory.CreateDirectory(paths.Mirror);
-        for (int i = 0; i < 14; i++) File.WriteAllText(Path.Combine(paths.Mirror, BackupService.Prefix(name) + "9999-" + i.ToString("D2") + ".bak"), "retention fixture");
+        for (int i = 0; i < 14; i++) File.WriteAllText(Path.Combine(paths.Mirror, BackupPrefix + "9999-" + i.ToString("D2") + ".bak"), "retention fixture");
         await service.RetryMirrorAsync(paths.Local, paths.Mirror);
         string target = Path.Combine(paths.Mirror, Path.GetFileName(local));
         Assert.That(File.Exists(target), Is.True); Assert.That(Digest(target), Is.EqualTo(Digest(local)));
@@ -220,10 +220,10 @@ public class BackupMirrorRetentionTests
         string root = Path.Combine(TestContext.CurrentContext.WorkDirectory, "mirror-retention-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
         try
         {
-            string prefix = BackupService.Prefix("MirrorRetention");
+            string prefix = BackupFixtures.Scope("MirrorRetention").Prefix;
             foreach (string number in new[] { "0000", "0001", "0002", "0003" })
             {
-                string path = Path.Combine(root, prefix + number + ".bak"); File.WriteAllText(path, "backup"); File.WriteAllText(path + ".verified", "verified"); File.WriteAllText(path + ".mirror.json", "state");
+                string path = Path.Combine(root, prefix + number + ".bak"); BackupFixtures.Write(path, BackupFixtures.Scope("MirrorRetention"), "backup"); File.WriteAllText(path + ".verified", "verified"); File.WriteAllText(path + ".mirror.json", "state");
             }
             string selected = Path.Combine(root, prefix + "0000.bak"), deleted = Path.Combine(root, prefix + "0001.bak");
             BackupService.Prune(root, prefix, 2, selected);

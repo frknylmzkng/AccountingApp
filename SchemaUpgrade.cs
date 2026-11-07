@@ -50,10 +50,16 @@ internal static class SchemaUpgrade
     {
         using var catalog = new SqlCommand("SELECT DB_NAME()", connection); string name = (string)catalog.ExecuteScalar()!;
         string root = folder ?? Path.Combine(BackupService.DefaultFolder, "schema-upgrades"); Directory.CreateDirectory(root);
-        string prefix = BackupService.Prefix(name); string path = Path.GetFullPath(Path.Combine(root, prefix + DateTime.UtcNow.ToString("yyyyMMddTHHmmssfffffff") + "-" + Guid.NewGuid().ToString("N")[..12] + ".bak"));
+        var scope = BackupScope.Read(connection);
+        if(!new SqlConnectionStringBuilder(connection.ConnectionString).DataSource.StartsWith(@"(LocalDB)\",StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Şifreli güvenlik yedeği aynı Windows hesabının LocalDB sunucusunu gerektirir; ayrı SQL Server için servis hesabı yedekleme kurulumu gerekir.");
+        using var stage=new BackupVault.Stage();
+        string prefix = scope.Prefix; string path = Path.GetFullPath(Path.Combine(stage.Folder, prefix + DateTime.UtcNow.ToString("yyyyMMddTHHmmssfffffff") + "-" + Guid.NewGuid().ToString("N")[..12] + ".bak"));
         if (path.Length > 259) throw new ArgumentException("Şema yedeği yolu çok uzun; daha kısa bir yedek klasörü seçin.");
         static string Literal(string s) => "N'" + s.Replace("'", "''") + "'";
-        using var backup = new SqlCommand($"BACKUP DATABASE [{name.Replace("]", "]]")}] TO DISK={Literal(path)} WITH COPY_ONLY,INIT,CHECKSUM", connection) { CommandTimeout = 180 };
-        backup.ExecuteNonQuery(); using var verify = new SqlCommand($"RESTORE VERIFYONLY FROM DISK={Literal(path)} WITH CHECKSUM", connection) { CommandTimeout = 180 }; verify.ExecuteNonQuery(); BackupService.Prune(root, prefix, 14, protectedBackupPath);
+        using var backup = new SqlCommand($"BACKUP DATABASE [{name.Replace("]", "]]")}] TO DISK={Literal(path)} WITH COPY_ONLY,INIT,CHECKSUM,NAME={Literal(scope.BackupName)}", connection) { CommandTimeout = 180 };
+        backup.ExecuteNonQuery(); using var verify = new SqlCommand($"RESTORE VERIFYONLY FROM DISK={Literal(path)} WITH CHECKSUM", connection) { CommandTimeout = 180 }; verify.ExecuteNonQuery();
+        scope.WriteManifestAsync(path, connection, CancellationToken.None).GetAwaiter().GetResult();
+        _=BackupVault.SealAsync(path,root,scope,CancellationToken.None).GetAwaiter().GetResult();
+        BackupService.Prune(root, prefix, BackupVault.Policy(scope.Key).Keep, protectedBackupPath);
     }
 }

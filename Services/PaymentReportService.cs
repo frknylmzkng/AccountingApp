@@ -9,10 +9,12 @@ internal sealed class PaymentReportService(string connectionString, UserSession 
 {
     public async Task<PrintReport> ReceiptAsync(Guid requestId, CancellationToken token = default)
     {
+        if (DesktopConnection.IsRemote(connectionString)) return RemoteApi.Print(await RemoteApi.For(connectionString, user).SendAsync<AccountingApp.Contracts.PrintData>($"reports/receipt/{requestId:D}", null, token).ConfigureAwait(false));
         if (requestId == Guid.Empty) throw new ArgumentException("Geçerli bir ödeme seçin.");
+        user.DemandExportPersonalData(); user.DemandViewSalary();
         await using var work = await SqlUnitOfWork.OpenAsync(connectionString, token).ConfigureAwait(false);
-        await AccountAuthorization.DemandAsync(work, user, AccountAccess.Read, token).ConfigureAwait(false);
-        using var command = work.Command(@"SELECT TC,PersonnelGroup,CreatedUtc,Delta,Actor,ReversedUtc
+        await AccountAuthorization.DemandAsync(work, user, AccountAccess.ExportPersonalData, token).ConfigureAwait(false);
+        using var command = work.Command(@"SELECT TC,PersonnelGroup,CreatedUtc,Delta,Actor,ReversedUtc,PersonId,PaymentPurpose,ProjectId
             FROM dbo.PaymentLedger WHERE RequestId=@id AND Kind=N'Payment'");
         command.Parameters.Add("@id", SqlDbType.UniqueIdentifier).Value = requestId;
         var rows = await command.TableAsync(token).ConfigureAwait(false);
@@ -28,6 +30,9 @@ internal sealed class PaymentReportService(string connectionString, UserSession 
             $"Durum: {(row.IsNull("ReversedUtc") ? "Kaydedildi" : "İptal edildi") }"
         };
         if (row["ReversedUtc"] is DateTime reversed) lines.Add($"İptal zamanı (UTC): {reversed:dd.MM.yyyy HH:mm:ss}");
+        lines.Add("Ödeme türü: " + (row.Field<string>("PaymentPurpose") switch { "Advance" => "Avans", "Settlement" => "Bakiye ödemesi", _ => "Eski kayıt / sınıflandırılmamış" }));
+        if (row["ProjectId"] is Guid projectId) lines.Add($"Proje kimliği: {projectId:D}");
+        lines.Add(row["PersonId"] is Guid personId ? $"Personel kimliği: {personId:D}" : "Eski kaydın personel kimliği bilinmiyor; başka karta bağlanmadı.");
         // Current personnel details may belong to a recreated record. They are not historical receipt data.
         lines.Add("Fiş ödeme kaydını gösterir; güncel personel bakiyesi ve IBAN'ı içermez.");
         await AddReadTimeAsync(work, lines, token).ConfigureAwait(false);
@@ -37,12 +42,14 @@ internal sealed class PaymentReportService(string connectionString, UserSession 
 
     public async Task<PrintReport> ClosingAsync(DateTime day, decimal declared, CancellationToken token = default)
     {
+        if (DesktopConnection.IsRemote(connectionString)) return RemoteApi.Print(await RemoteApi.For(connectionString, user).SendAsync<AccountingApp.Contracts.PrintData>($"reports/closing-preview?day={RemoteApi.Day(day)}&declared={RemoteApi.Money(declared)}", null, token).ConfigureAwait(false));
         if (declared < 0 || declared > 9999999999999999.99m || decimal.Round(declared, 2) != declared)
             throw new ArgumentException("Beyan edilen toplam geçerli, negatif olmayan bir TL tutarı olmalı.");
-        var zone = TimeZoneInfo.Local;
+        var zone = DailyClosingService.BusinessZone;
         var (start, end) = UtcDayRange(day, zone);
+        user.DemandExportPersonalData(); user.DemandViewSalary();
         await using var work = await SqlUnitOfWork.OpenAsync(connectionString, token).ConfigureAwait(false);
-        await AccountAuthorization.DemandAsync(work, user, AccountAccess.Read, token).ConfigureAwait(false);
+        await AccountAuthorization.DemandAsync(work, user, AccountAccess.ExportPersonalData, token).ConfigureAwait(false);
         using var command = work.Command(@"SELECT TC,Delta FROM dbo.PaymentLedger
             WHERE Kind=N'Payment' AND ReversedUtc IS NULL AND CreatedUtc>=@start AND CreatedUtc<@end
             ORDER BY LedgerId");

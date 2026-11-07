@@ -18,12 +18,15 @@ internal sealed class SqlUnitOfWork : IUnitOfWork
     private SqlUnitOfWork(SqlConnection connection, SqlTransaction transaction) { this.connection = connection; this.transaction = transaction; }
     public static async Task<SqlUnitOfWork> OpenAsync(string connectionString, CancellationToken token)
     {
+        if (DesktopConnection.IsRemote(connectionString)) throw new InvalidOperationException("API modunda doğrudan SQL bağlantısı kullanılamaz.");
         var connection = new SqlConnection(connectionString);
         try
         {
             await connection.OpenAsync(token).ConfigureAwait(false);
             var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable, token).ConfigureAwait(false);
-            return new(connection, transaction);
+            var work = new SqlUnitOfWork(connection, transaction);
+            await AuditContext.InitializeAsync(work, token).ConfigureAwait(false);
+            return work;
         }
         catch { await connection.DisposeAsync().ConfigureAwait(false); throw; }
     }
@@ -43,7 +46,21 @@ internal sealed class SqlUnitOfWork : IUnitOfWork
                 catch (Exception ex) when (ex is SqlException or InvalidOperationException) { AppLog.Failure(ex, "Transaction.Rollback"); }
             }
         }
-        finally { await transaction.DisposeAsync().ConfigureAwait(false); await connection.DisposeAsync().ConfigureAwait(false); }
+        finally
+        {
+            try
+            {
+                await transaction.DisposeAsync().ConfigureAwait(false);
+                using var clear = new SqlCommand(@"EXEC sys.sp_set_session_context @key=N'Audit.Actor',@value=NULL;
+                    EXEC sys.sp_set_session_context @key=N'Audit.ActorId',@value=NULL;
+                    EXEC sys.sp_set_session_context @key=N'Audit.Reason',@value=NULL;
+                    EXEC sys.sp_set_session_context @key=N'Audit.Correlation',@value=NULL;", connection);
+                await clear.ExecuteNonQueryAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is SqlException or InvalidOperationException)
+            { SqlConnection.ClearPool(connection); AppLog.Failure(ex, "Audit.ContextCleanup"); }
+            finally { await connection.DisposeAsync().ConfigureAwait(false); }
+        }
     }
 }
 

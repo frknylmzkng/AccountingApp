@@ -14,6 +14,7 @@ internal sealed partial class AccountService
 
     public async Task ChangePasswordAsync(UserSession user, string currentPassword, string newPassword, string confirmation, CancellationToken token = default)
     {
+        if (DesktopConnection.IsRemote(connectionString)) { await RemoteApi.For(connectionString, user).Done("auth/change-password", new AccountingApp.Contracts.PasswordChangeRequest(currentPassword, newPassword, confirmation, RemoteApi.Reason), token).ConfigureAwait(false); return; }
         PasswordPolicy.Validate(newPassword, confirmation);
         string oldHash = await VerifyCurrentPasswordAsync(user, currentPassword, AccountAccess.ChangePassword, token).ConfigureAwait(false);
         if (await Task.Run(() => PasswordHasher.Verify(newPassword, oldHash), token).ConfigureAwait(false)) throw new ArgumentException("Yeni parola mevcut paroladan farklı olmalıdır.");
@@ -33,6 +34,11 @@ internal sealed partial class AccountService
 
     public async Task<PasswordResetResult> ResetPasswordAsync(UserSession user, AccountTarget selected, string adminPassword, CancellationToken token = default)
     {
+        if (DesktopConnection.IsRemote(connectionString))
+        {
+            var r = await RemoteApi.For(connectionString, user).SendAsync<AccountingApp.Contracts.ResetResult>("accounts/reset-password", new AccountingApp.Contracts.AccountReset(RemoteApi.Target(selected), adminPassword, RemoteApi.Reason), token).ConfigureAwait(false);
+            return new(r.Username, r.TemporaryPassword, r.ExpiresUtc);
+        }
         user.DemandAdmin();
         if (string.IsNullOrWhiteSpace(selected.Username) || selected.Username.Length > 50 || selected.Version is not { Length: 8 } || selected.Epoch == Guid.Empty)
             throw new ArgumentException("Hesap listesini yenileyip sıfırlanacak hesabı yeniden seçin.");

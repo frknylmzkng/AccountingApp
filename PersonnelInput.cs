@@ -27,17 +27,12 @@ namespace WinFormsApp2
                 return false;
             }
 
-            string iban = ibanText.ToUpperInvariant().Replace(" ", "");
             if (firstName.Trim().Length > 50 || lastName.Trim().Length > 50 || firstName.Any(char.IsControl) || lastName.Any(char.IsControl))
             {
                 error = "Ad ve soyadı 1–50 karakter olarak, kontrol karakteri olmadan girin.";
                 return false;
             }
-            if (iban.Length < 16 || iban.Length > 34)
-            {
-                error = "Geçersiz IBAN!";
-                return false;
-            }
+            if (!IbanInput.TryNormalize(ibanText, out string iban, out error)) return false;
 
             if (!MoneyInput.TryParse(amountText, out decimal amount))
             {
@@ -45,8 +40,17 @@ namespace WinFormsApp2
                 return false;
             }
 
-            person = new PersonnelDetails(tcNumber, firstName, lastName, iban, amount);
+            person = new PersonnelDetails(tcNumber, firstName.Trim(), lastName.Trim(), iban, amount);
             return true;
+        }
+
+        internal static PersonnelDetails Normalize(PersonnelDetails person)
+        {
+            ArgumentNullException.ThrowIfNull(person);
+            if (!TryCreate(person.Tc.ToString(CultureInfo.InvariantCulture), person.FirstName, person.LastName,
+                person.Iban, MoneyInput.Format(person.Amount), out var normalized, out string error))
+                throw new ArgumentException(error, nameof(person));
+            return normalized;
         }
     }
 }

@@ -49,6 +49,7 @@ internal static class ReportExport
     }
     private static bool[]? PersonnelBalanceRows(DataTable table)
     {
+        if (!table.Columns.Cast<DataColumn>().Any(c => SourceName(c) == "PARA" && c.DataType == typeof(decimal))) return null;
         if (table.ExtendedProperties[BalanceFirstRows] is bool[] rows)
         {
             if (rows.Length != table.Rows.Count) throw new InvalidOperationException("Rapor satırları değişmiş. Raporu yeniden oluşturun.");
@@ -73,13 +74,24 @@ internal static class ReportExport
         table = WithoutInternalColumns(table);
         using var writer = new StreamWriter(path, false, new UTF8Encoding(true));
         writer.NewLine = "\r\n"; writer.WriteLine(string.Join(";", table.Columns.Cast<DataColumn>().Select(c => CsvCell(c.ColumnName))));
-        foreach (DataRow row in table.Rows) writer.WriteLine(string.Join(";", row.ItemArray.Select(CsvCell)));
+        foreach (DataRow row in table.Rows) writer.WriteLine(string.Join(";", table.Columns.Cast<DataColumn>().Select(column =>
+            row[column] is DateTime date && IsUtcColumn(column)
+                ? CsvCell(date.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", CultureInfo.InvariantCulture)) : CsvCell(row[column]))));
     }
     public static void Excel(DataTable table, string path)
     {
         table = WithoutInternalColumns(table);
         var balanceRows = PersonnelBalanceRows(table);
-        using var workbook = new XLWorkbook(); var sheet = workbook.AddWorksheet("Personel raporu");
+        using var workbook = new XLWorkbook(); var sheet = workbook.AddWorksheet(table.ExtendedProperties["Export.ReportTitle"] is string ? "Rapor" : "Personel raporu");
+        if (table.ExtendedProperties["Export.ReportTitle"] is string reportTitle)
+        {
+            var information = workbook.AddWorksheet("Rapor bilgisi");
+            information.Cell(1, 1).Value = "Seçilen rapor"; information.Cell(1, 2).Value = reportTitle;
+            information.Cell(2, 1).Value = "Kapsam"; information.Cell(2, 2).Value = table.ExtendedProperties["Export.ReportScope"]?.ToString() ?? "";
+            information.Cell(3, 1).Value = "Dışa aktarma UTC"; information.Cell(3, 2).Value = DateTime.UtcNow.ToString("O");
+            information.Column(1).Width = 24; information.Column(2).Width = 90;
+            information.Column(2).Style.Alignment.WrapText = true; information.Rows().AdjustToContents();
+        }
         bool distinctBalance = balanceRows?.Any(first => !first) == true;
         const string totalsSheet = "_ToplamHesabi";
         if (distinctBalance)
@@ -102,7 +114,7 @@ internal static class ReportExport
                 if (value is decimal d) cell.Value = d;
                 else if (value is int n) cell.Value = n;
                 else if (value is long l) cell.Value = l.ToString(CultureInfo.InvariantCulture); // preserve identifiers exactly
-                else if (value is DateTime date) { cell.Value = date; cell.Style.DateFormat.Format = "dd.mm.yyyy"; }
+                else if (value is DateTime date) { cell.Value = date; cell.Style.DateFormat.Format = IsUtcColumn(table.Columns[c]) ? "dd.mm.yyyy hh:mm:ss" : "dd.mm.yyyy"; }
                 else cell.Value = value.ToString() ?? "";
             }
             if (table.Columns[c].DataType == typeof(decimal))
@@ -132,6 +144,7 @@ internal static class ReportExport
         workbook.SaveAs(path);
     }
     public static void Open(string path) => Process.Start(new ProcessStartInfo(Path.GetFullPath(path)) { UseShellExecute = true });
+    private static bool IsUtcColumn(DataColumn column) => SourceName(column).Contains("Utc", StringComparison.OrdinalIgnoreCase) || column.ColumnName.Contains("UTC", StringComparison.OrdinalIgnoreCase);
     private static DataTable WithoutInternalColumns(DataTable table)
     {
         if (!table.Columns.Cast<DataColumn>().Any(c => RecordSelection.IsInternalColumnName(SourceName(c)))) return table;

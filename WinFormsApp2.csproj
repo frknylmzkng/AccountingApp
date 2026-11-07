@@ -13,6 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="api\AccountingApp.Contracts\AccountingApp.Contracts.csproj" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.1" />
     <PackageReference Include="dbup-sqlserver" Version="7.2.0" />
     <PackageReference Include="NLog" Version="6.2.2" />
@@ -20,6 +21,7 @@
     <PackageReference Include="QRCoder" Version="1.8.1" />
     <Compile Remove="tests\**\*.cs" />
     <Compile Remove="tools\**\*.cs" />
+    <Compile Remove="api\**\*.cs" />
     <EmbeddedResource Include="database\migrations\*.sql" />
     <EmbeddedResource Include="database\upgrades\*.sql" />
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

@@ -1,0 +1,18 @@
+<Project>
+  <PropertyGroup>
+    <VersionPrefix>1.3.33</VersionPrefix>
+    <VersionSuffix Condition="'$(ReleaseBuild)' != 'true' and '$(VersionSuffix)' == ''">dev</VersionSuffix>
+    <AssemblyVersion>$(VersionPrefix).0</AssemblyVersion>
+    <FileVersion>$(VersionPrefix).0</FileVersion>
+    <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
+    <SourceTreeState Condition="'$(SourceTreeState)' == ''">unverified</SourceTreeState>
+    <AccountingSchemaVersion>137</AccountingSchemaVersion>
+    <AccountingRuntimeVersion>10.0.14</AccountingRuntimeVersion>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="SourceTreeState" Value="$(SourceTreeState)" />
+    <AssemblyMetadata Include="AccountingSchemaVersion" Value="$(AccountingSchemaVersion)" />
+    <AssemblyMetadata Include="AccountingRuntimeVersion" Value="$(AccountingRuntimeVersion)" />
+  </ItemGroup>
+</Project>

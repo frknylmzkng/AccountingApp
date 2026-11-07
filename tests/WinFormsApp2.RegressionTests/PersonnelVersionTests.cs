@@ -30,7 +30,7 @@ public class PersonnelVersionTests
     public async Task MissingOrMalformedVersionIsRejectedBeforeDatabaseAccess(int length)
     {
         var service = new PersonnelService("invalid connection string", new("operator", UserRole.PersonnelManager));
-        var person = new PersonnelDetails(11111111111L, "Ada", "Test", "TR000000000000000000000000", 100m);
+        var person = new PersonnelDetails(11111111111L, "Ada", "Test", "TR470000100100000350930001", 100m);
         byte[]? version = length < 0 ? null : new byte[length];
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await service.SaveAsync(PersonnelGroup.General, person, false, expectedVersion: version));
     }
@@ -42,10 +42,10 @@ public class PersonnelVersionTests
     {
         var service = new PersonnelService("invalid connection string", new("operator", UserRole.PersonnelManager));
         byte[]? version = length < 0 ? null : new byte[length];
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () => await service.DeleteAsync(PersonnelGroup.General, 11111111111L, version));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () => await service.DeleteAsync(PersonnelGroup.General, 11111111111L, version, employmentEnd: new DateTime(2099, 12, 31)));
         Assert.That(error!.Message, Does.Contain("sürüm bilgisi eksik"));
         var store = new PersonnelStore("invalid connection string");
-        Assert.Throws<InvalidOperationException>(() => store.Delete(PersonnelGroup.General, 11111111111L, version));
+        Assert.Throws<InvalidOperationException>(() => store.Delete(PersonnelGroup.General, 11111111111L, version, employmentEnd: new DateTime(2099, 12, 31)));
     }
     [Test]
     public void SelectedVersionComesFromOriginalRowAndReturnsDefensiveCopy()
@@ -62,7 +62,7 @@ public class PersonnelVersionTests
         using var form = new Joker { PreviewOnly = true, PersistGridLayout = false, Session = new("preview-user", UserRole.Admin), Opacity = 0, ShowInTaskbar = false };
         form.Show();
         var table = Records(); table.Columns.Add("SOYAD"); table.Columns.Add("IBAN"); table.Columns.Add("GRUP");
-        foreach (DataRow row in table.Rows) { row["SOYAD"] = "Örnek"; row["IBAN"] = "TR000000000000000000000000"; row["GRUP"] = "Joker"; }
+        foreach (DataRow row in table.Rows) { row["SOYAD"] = "Örnek"; row["IBAN"] = "TR470000100100000350930001"; row["GRUP"] = "Joker"; }
         table.AcceptChanges();
         var grid = AppTheme.Descendants(form).OfType<DataGridView>().Single(); grid.DataSource = table;
         table.DefaultView.Sort = "TC DESC"; grid.ClearSelection(); grid.Rows[0].Selected = true;

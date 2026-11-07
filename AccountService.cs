@@ -7,19 +7,22 @@ internal sealed partial class AccountService(string connectionString)
 {
     public async Task<UserSession?> AuthenticateAsync(string username, string password, CancellationToken token = default)
     {
+        if (DesktopConnection.IsRemote(connectionString)) return await RemoteApi.LoginAsync(connectionString, username, password, token).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(username) || username.Trim().Length > 50 || string.IsNullOrEmpty(password) || password.Length > PasswordHasher.MaxPasswordLength) return null;
         try { return (await VerifyCredentialAsync(username.Trim(), password, null, AccountAccess.Read, token).ConfigureAwait(false))?.User; }
         catch (SessionRevokedException) { return null; } // Account changed during verification.
     }
     public async Task<DataTable> ListAsync(UserSession user, CancellationToken token)
     {
+        if (DesktopConnection.IsRemote(connectionString)) return await RemoteApi.For(connectionString, user).TableAsync("accounts", token).ConfigureAwait(false);
         user.DemandAdmin(); await using var work = await SqlUnitOfWork.OpenAsync(connectionString, token).ConfigureAwait(false);
         await AccountAuthorization.DemandAsync(work, user, AccountAccess.Admin, token).ConfigureAwait(false);
-        using var cmd = work.Command("SELECT username,RoleName,IsActive,MustChangePassword,PasswordResetExpiresUtc,SessionVersion AS AccountVersion,SessionEpoch AS AccountEpoch FROM dbo.admin ORDER BY username");
+        using var cmd = work.Command("SELECT username,RoleName,IsActive,MustChangePassword,PasswordResetExpiresUtc,CASE WHEN RoleName=N'Admin' THEN CAST(1 AS bit) ELSE CanPay END CanPay,CASE WHEN RoleName=N'Admin' THEN CAST(1 AS bit) ELSE CanExportPersonalData END CanExportPersonalData,CASE WHEN RoleName=N'Admin' THEN CAST(1 AS bit) ELSE CanViewSalary END CanViewSalary,CASE WHEN RoleName=N'Admin' THEN CAST(1 AS bit) ELSE CanViewIban END CanViewIban,SessionVersion AS AccountVersion,SessionEpoch AS AccountEpoch FROM dbo.admin ORDER BY username");
         var result = await cmd.TableAsync(token).ConfigureAwait(false); await work.CommitAsync(token).ConfigureAwait(false); return result;
     }
     public async Task AddAsync(UserSession user, string username, string password, UserRole role, CancellationToken token)
     {
+        if (DesktopConnection.IsRemote(connectionString)) { await RemoteApi.For(connectionString, user).Done("accounts/add", new AccountingApp.Contracts.AccountAdd(username, password, (AccountingApp.Contracts.UserRole)role, RemoteApi.Reason), token).ConfigureAwait(false); return; }
         user.DemandAdmin(); username = AdminStore.ValidateNewAccount(username, password);
         PasswordPolicy.Validate(password, password);
         if (!Enum.IsDefined(role)) throw new ArgumentException("Geçersiz rol.");
@@ -37,6 +40,12 @@ internal sealed partial class AccountService(string connectionString)
 
     private async Task ChangeAccountAsync(UserSession user, AccountTarget? selected, bool? active, CancellationToken token)
     {
+        if (DesktopConnection.IsRemote(connectionString))
+        {
+            var remoteTarget = RemoteApi.Target(selected);
+            object body = active.HasValue ? new AccountingApp.Contracts.AccountActive(remoteTarget, active.Value, RemoteApi.Reason) : new AccountingApp.Contracts.AccountDelete(remoteTarget, RemoteApi.Reason);
+            await RemoteApi.For(connectionString, user).Done(active.HasValue ? "accounts/active" : "accounts/delete", body, token).ConfigureAwait(false); return;
+        }
         user.DemandAdmin();
         var target = AccountTarget.RequireSnapshot(selected);
         await using var work = await SqlUnitOfWork.OpenAsync(connectionString, token).ConfigureAwait(false);

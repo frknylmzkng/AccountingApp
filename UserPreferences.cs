@@ -11,6 +11,9 @@ namespace WinFormsApp2;
 internal sealed class UserPreferences
 {
     public bool DarkTheme { get; set; }
+    public bool UseCentralApi { get; set; }
+    public string CentralApiUrl { get; set; } = "https://localhost:7443/";
+    public Dictionary<string, string> CentralApiScopes { get; set; } = new();
     public bool ClassicTheme { get; set; } = true;
     public string DatabaseConfigurationPath { get; set; } = "";
     public string BackupFolder { get; set; } = "";

@@ -1,0 +1,8 @@
+{
+  "Database": {
+    "Server": ".\\SQLEXPRESS",
+    "Name": "AccountingApp",
+    "FilePath": "",
+    "ConnectTimeoutSeconds": 30
+  }
+}

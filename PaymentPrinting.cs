@@ -54,8 +54,34 @@ internal static class PaymentPrinting
     }
     public static void Preview(IWin32Window owner, PrintReport report, bool thermal)
     {
+        if (SessionUiState.IsLocked) return;
+        if (owner is not SessionForm screen) throw new UnauthorizedAccessException("Yazdırma için etkin uygulama oturumu gerekiyor.");
+        screen.User.DemandExportPersonalData();
         using var document = Create(report, thermal, UserPreferences.Load().LogoPath);
+        SqlUnitOfWork? authorization = null;
+        document.BeginPrint += (_, e) =>
+        {
+            try
+            {
+                authorization?.DisposeAsync().AsTask().GetAwaiter().GetResult(); authorization = null;
+                if (screen.User.Remote != null)
+                {
+                    screen.User.Remote.ValidateAsync(AccountAccess.ExportPersonalData, CancellationToken.None).GetAwaiter().GetResult();
+                    return;
+                }
+                authorization = SqlUnitOfWork.OpenAsync(AppDatabase.ConnectionString, CancellationToken.None).GetAwaiter().GetResult();
+                AccountAuthorization.DemandAsync(authorization, screen.User, AccountAccess.ExportPersonalData, CancellationToken.None).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                e.Cancel = true; authorization?.DisposeAsync().AsTask().GetAwaiter().GetResult(); authorization = null;
+                AppLog.Failure(ex, "Print.Authorization");
+                MessageBox.Show(owner, ex is UnauthorizedAccessException ? ex.Message : "Yazdırma yetkisi doğrulanamadı.", "Yazdırma");
+            }
+        };
+        document.EndPrint += (_, _) => { authorization?.DisposeAsync().AsTask().GetAwaiter().GetResult(); authorization = null; };
         using var preview = new PrintPreviewDialog { Document = document, Width = 1050, Height = 800, UseAntiAlias = true };
-        preview.ShowDialog(owner);
+        try { preview.ShowDialog(owner); }
+        finally { authorization?.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
     }
 }

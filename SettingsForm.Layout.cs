@@ -19,12 +19,12 @@ internal sealed partial class SettingsForm
                 if (file)
                 {
                     using var dialog = new OpenFileDialog { Filter = ReferenceEquals(field, logo) ? "PNG logo|*.png" : "Bağlantı profili|*.json", CheckFileExists = true };
-                    if (dialog.ShowDialog(this) == DialogResult.OK) field.Text = dialog.FileName;
+                    if (dialog.ShowDialog(this) == DialogResult.OK) { field.Text = dialog.FileName; MarkTrackedChanges(); }
                 }
                 else
                 {
                     using var dialog = new FolderBrowserDialog();
-                    if (dialog.ShowDialog(this) == DialogResult.OK) field.Text = dialog.SelectedPath;
+                    if (dialog.ShowDialog(this) == DialogResult.OK) { field.Text = dialog.SelectedPath; MarkTrackedChanges(); }
                 }
             };
             return new(caption, field, browse);
@@ -34,7 +34,7 @@ internal sealed partial class SettingsForm
             new Label { Text = "Boş bırakırsanız uygulamanın appsettings.json dosyası kullanılır. Profil değişikliği kaydedildiğinde yeniden giriş gerekir." });
         var backups = new SettingsCard("settingsBackups", "Yedekleme ve geri yükleme",
             [Field("Ana yedek klasörü:", backup, "backupFolder", false), Field("Aynalama klasörü:", mirror, "mirrorFolder", false)],
-            new Label { Text = "Yönetici oturumu açıkken saatlik kontrol: ana yedek 24 saatte bir, eksik aynalama sonraki kontrolde yeniden denenir. Son 14 yedek tutulur. Ana klasör boşsa kullanıcı uygulama klasörü kullanılır; yedekler personel verilerini içerir." });
+            new Label { Text = "Yeni yedekler şifreli .bak.abk olarak saklanır. Saklama sayısı ve kurtarma durumu Güvenli yedek / destek ekranındadır. Yerel yönetici oturumunda günlük yedek/aynalama kontrolü sürer; merkezi API için yedekleme sunucuda başlatılır. Eski açık .bak dosyaları otomatik silinmez." });
         classic.Name = "classicTheme"; dark.Name = "darkTheme";
         logo.PlaceholderText = "İsteğe bağlı PNG dosyası";
         var appearance = new SettingsCard("settingsAppearance", "Görünüm ve fiş",
@@ -42,7 +42,8 @@ internal sealed partial class SettingsForm
         result.Name = "backupStatus"; result.Text = "Yedek ve aynalama durumu kontrol ediliyor…";
         var status = new SettingsCard("settingsStatus", "Yedek ve aynalama durumu", [], result);
         save.Name = "settingsSave"; create.Name = "settingsBackup"; retry.Name = "settingsRetryMirror"; restore.Name = "settingsRestore";
-        var actions = new SettingsActions([save, create, retry, restore]);
+        var security=new Button{Name="settingsBackupSecurity",Text="Güvenli yedek / destek…"};security.Click+=(_,_)=>{if(IsOperationRunning||!ConfirmDiscardChanges("Güvenli yedek ve destek ekranını açma"))return;using var d=new BackupSecurityForm(User);d.SessionRevoked+=(_,_)=>NotifySessionRevoked();d.ShowDialog(this);};
+        var actions = new SettingsActions([save, create, retry, restore,security]);
         var workspace = new SettingsWorkspace([connection, backups, appearance, status], actions) { Dock = DockStyle.Fill, Margin = Padding.Empty, TabIndex = 0 };
         var navigation = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty, TabIndex = 1 };
         var targets = new[] { ("settingsShowConnection", "Bağlantı", connection), ("settingsShowBackups", "Yedekleme", backups),

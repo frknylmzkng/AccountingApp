@@ -104,6 +104,7 @@ namespace WinFormsApp2
             {
                 lock (Gate)
                 {
+                    if (DesktopConnection.ApiAddress is { } address) return "api:" + address.AbsoluteUri;
                     // Freeze a valid configuration for this process; a failed read can be retried.
                     if (settings == null)
                     {

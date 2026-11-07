@@ -3,10 +3,12 @@ namespace WinFormsApp2;
 public partial class Admin : SessionForm
 {
     private readonly ComboBox role = new() { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(175, 213), Width = 185 };
+    private readonly Button permissions = new() { Name = "adminPermissions", Text = "Ek yetkiler…", AutoSize = true, Enabled = false };
+    private readonly Button personLink = new() { Name = "adminPersonLink", Text = "Personel eşlemesi…", AutoSize = true };
     public Admin()
     {
         InitializeComponent(); RecordSelection.Configure(adminView);
-        role.Items.AddRange(["Yönetici", "Personel sorumlusu", "Görüntüleyici"]); role.SelectedIndex = 0;
+        role.Items.AddRange(["Yönetici (genel)", "Personel sorumlusu (genel)", "Görüntüleyici (genel)", "Proje kullanıcısı (kısıtlı)"]); role.SelectedIndex = 0;
         Controls.Add(new Label { Text = "Yetki", Location = new Point(45, 216), AutoSize = true }); Controls.Add(role);
         var deactivate = new Button { Text = "Pasife al", AutoSize = true, Location = new Point(45, 310) };
         var activate = new Button { Text = "Etkinleştir", AutoSize = true, Location = new Point(175, 310) };
@@ -17,9 +19,13 @@ public partial class Admin : SessionForm
         Controls.Add(reset); EditControls.Add(reset); reset.Click += ResetPassword;
         EditControls.AddRange([ekle_btn, sil_btn]); RefreshAction = LoadDataAsync;
         DeleteAction = () => sil_btn_Click(this, EventArgs.Empty);
-        ArrangeAdmin(deactivate, activate, reset);
+        Controls.Add(permissions); EditControls.Add(permissions); permissions.Click += EditPermissions;
+        Controls.Add(personLink); EditControls.Add(personLink); personLink.Click += EditPersonLink;
+        ArrangeAdmin(deactivate, activate, reset, permissions, personLink);
+        TrackChanges("Yeni yönetici hesabı", txtUsername, txtPassword, role);
     }
     private async void Admin_Load(object sender, EventArgs e) { if (!PreviewOnly) await LoadDataAsync(); }
+    protected override void RefreshEditState() => personLink.Enabled = permissions.Enabled = Session?.Role == UserRole.Admin && !IsOperationRunning;
     private void back_Click(object sender, EventArgs e) => RequestBack();
     private async Task LoadDataAsync() => await RunOperationAsync(async token =>
     {
@@ -27,6 +33,7 @@ public partial class Admin : SessionForm
         if (!IsDisposed && !token.IsCancellationRequested)
         {
             adminView.DataSource = data; adminView.ClearSelection();
+            adminView.Columns["CanViewSalary"]!.HeaderText = "Ücret görüntüle"; adminView.Columns["CanViewIban"]!.HeaderText = "IBAN görüntüle";
             if (adminView.Columns["IsActive"] is { } active) active.HeaderText = "Etkin";
             if (adminView.Columns["MustChangePassword"] is { } required) required.HeaderText = "Parola yenileme gerekli";
             if (adminView.Columns["PasswordResetExpiresUtc"] is { } expiry) expiry.HeaderText = "Geçici parola sonu (UTC)";
@@ -46,6 +53,30 @@ public partial class Admin : SessionForm
         using (var secret = new TemporaryPasswordDialog(dialog.Result)) secret.ShowDialog(this);
         if (!IsDisposed) await LoadDataAsync();
     }
+    private async void EditPermissions(object? sender, EventArgs e)
+    {
+        AccountTarget target;
+        try { target = AccountTarget.FromGrid(adminView); }
+        catch (InvalidOperationException ex) { MessageBox.Show(this, ex.Message); return; }
+        if (adminView.SelectedRows[0].DataBoundItem is not System.Data.DataRowView selected) return;
+        var row = selected.Row; var version = System.Data.DataRowVersion.Original;
+        using var dialog = new AccountPermissionsDialog(User, target, row["RoleName", version].ToString() == "Admin", (bool)row["CanPay", version], (bool)row["CanExportPersonalData", version], (bool)row["CanViewSalary", version], (bool)row["CanViewIban", version]);
+        var result = dialog.ShowDialog(this);
+        if (IsDisposed) return;
+        if (dialog.SessionInvalidated) { NotifySessionRevoked(); return; }
+        if (result == DialogResult.OK) await LoadDataAsync();
+    }
+    private async void EditPersonLink(object? sender, EventArgs e)
+    {
+        AccountTarget target;
+        try { target = AccountTarget.FromGrid(adminView); }
+        catch (InvalidOperationException ex) { MessageBox.Show(this, ex.Message); return; }
+        using var dialog = new AccountPersonDialog(User, target);
+        var result = dialog.ShowDialog(this);
+        if (IsDisposed) return;
+        if (dialog.SessionInvalidated) { NotifySessionRevoked(); return; }
+        if (result == DialogResult.OK) await LoadDataAsync();
+    }
     private async Task SetActiveAsync(bool active)
     {
         AccountTarget target;
@@ -53,14 +84,14 @@ public partial class Admin : SessionForm
         catch (InvalidOperationException ex) { MessageBox.Show(this, ex.Message); return; }
         string question = active ? $"{target.Username} hesabı etkinleştirilsin mi?" : $"{target.Username} hesabı pasife alınsın mı? Açık oturumları sona erecek ve yeniden giriş yapamayacak.";
         if (MessageBox.Show(this, question, "Hesap durumu", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-        if (await RunOperationAsync(token => new AccountService(AppDatabase.ConnectionString).SetActiveAsync(User, target, active, token), active ? "Hesap etkinleştirildi." : "Hesap pasife alındı.") && !IsDisposed) await LoadDataAsync();
+        if (await RunChangeOperationAsync(token => new AccountService(AppDatabase.ConnectionString).SetActiveAsync(User, target, active, token), active ? "Hesap etkinleştirildi." : "Hesap pasife alındı.") && !IsDisposed) await LoadDataAsync();
     }
     private async void ekle_btn_Click(object sender, EventArgs e)
     {
         string username = txtUsername.Text, password = txtPassword.Text; UserRole selected = (UserRole)role.SelectedIndex;
-        bool done = await RunOperationAsync(token => new AccountService(AppDatabase.ConnectionString).AddAsync(User, username, password, selected, token), "Hesap eklendi.");
+        bool done = await RunChangeOperationAsync(token => new AccountService(AppDatabase.ConnectionString).AddAsync(User, username, password, selected, token), "Hesap eklendi.");
         if (!IsDisposed) txtPassword.Clear();
-        if (done && !IsDisposed) { txtUsername.Clear(); await LoadDataAsync(); }
+        if (done && !IsDisposed) { txtUsername.Clear(); AcceptTrackedChanges("Yeni yönetici hesabı"); await LoadDataAsync(); }
     }
     private async void sil_btn_Click(object sender, EventArgs e)
     {
@@ -68,6 +99,6 @@ public partial class Admin : SessionForm
         try { target = AccountTarget.FromGrid(adminView); }
         catch (InvalidOperationException ex) { MessageBox.Show(this, ex.Message); return; }
         if (MessageBox.Show(this, $"{target.Username} hesabı silinsin mi?", "Hesap sil", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
-        if (await RunOperationAsync(token => new AccountService(AppDatabase.ConnectionString).DeleteAsync(User, target, token), "Hesap silindi.") && !IsDisposed) await LoadDataAsync();
+        if (await RunChangeOperationAsync(token => new AccountService(AppDatabase.ConnectionString).DeleteAsync(User, target, token), "Hesap silindi.") && !IsDisposed) await LoadDataAsync();
     }
 }

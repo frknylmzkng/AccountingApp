@@ -12,6 +12,7 @@ namespace WinFormsApp2
         private System.Windows.Forms.Timer? sessionTimer;
         private bool sessionChecking;
         private bool sessionRevoked;
+        private IdleSessionGuard? idleGuard;
         internal Func<UserSession, CancellationToken, Task<bool>>? SessionValidator { get; set; }
 
         internal string? Username { get; private set; }
@@ -38,15 +39,17 @@ namespace WinFormsApp2
             Username = user.Username;
             Session = user;
             sessionRevoked = false;
-            try { SwitchTo(user.MustChangePassword ? AppPage.PasswordChange : AppPage.Dashboard); }
-            catch { Username = null; Session = null; throw; }
+            try { SwitchTo(user.MustChangePassword ? AppPage.PasswordChange : user.Role == UserRole.ProjectUser ? AppPage.ProjectPortal : AppPage.Dashboard); }
+            catch { user.Remote?.End(); Username = null; Session = null; throw; }
             if (backgroundServices)
             {
+                idleGuard = new IdleSessionGuard(user, AppDatabase.ConnectionString,
+                    () => Logout("Kilitli oturum sonlandırıldı. Yeniden giriş yapın.", force: true), () => sessionRevoked);
                 sessionLifetime = new();
                 SessionValidator ??= (current, token) => AccountAuthorization.IsCurrentAsync(AppDatabase.ConnectionString, current, token);
                 sessionTimer = new System.Windows.Forms.Timer { Interval = 30000 };
                 sessionTimer.Tick += async (_, _) => await CheckSessionAsync(); sessionTimer.Start();
-                if (user.Role == UserRole.Admin && !user.MustChangePassword)
+                if (user.Role == UserRole.Admin && !user.MustChangePassword && user.Remote == null)
                 {
                     backupTimer = new System.Windows.Forms.Timer { Interval = 3600000 };
                     backupTimer.Tick += async (_, _) => await DailyBackupAsync(); backupTimer.Start();
@@ -58,19 +61,28 @@ namespace WinFormsApp2
 
         internal bool Navigate(AppPage page)
         {
+            if (Session?.Role == UserRole.ProjectUser && page == AppPage.Dashboard) page = AppPage.ProjectPortal;
+            if (Session?.Role == UserRole.ProjectUser && page is not (AppPage.ProjectPortal or AppPage.PasswordChange)) return false;
             if (sessionRevoked) { Logout(SessionRevokedException.Notice); return false; }
-            if (exiting || switching || !IsAuthenticated || MainForm is SessionForm { IsOperationRunning: true } || page == AppPage.Login ||
+            if (exiting || switching || !SessionUiState.CanInteract || !IsAuthenticated || MainForm is SessionForm { IsOperationRunning: true } || page == AppPage.Login ||
                 !Enum.IsDefined(typeof(AppPage), page))
                 return false;
             if (page is AppPage.Admin or AppPage.Settings && Session?.Role != UserRole.Admin) return false;
             if (Session?.MustChangePassword == true && page != AppPage.PasswordChange) return false;
-            if (CurrentPage != page) SwitchTo(page);
+            if (CurrentPage != page)
+            {
+                if (MainForm is SessionForm current && !current.ConfirmDiscardChanges("Ekranı değiştirme")) return false;
+                SwitchTo(page);
+            }
             return true;
         }
 
-        internal void Logout(string? notice = null)
+        internal void Logout(string? notice = null, bool force = false)
         {
-            if (exiting || switching || !IsAuthenticated || MainForm is SessionForm { IsOperationRunning: true }) return;
+            force |= notice != null;
+            if (exiting || switching || !IsAuthenticated || (!force && MainForm is SessionForm { IsOperationRunning: true })) return;
+            if (force && SessionUiState.ActiveOperations > 0) { idleGuard?.Lock(); return; }
+            if (!force && (SessionUiState.IsLocked || MainForm is SessionForm current && !current.ConfirmDiscardChanges("Oturumu kapatma"))) return;
             StopBackgroundWork();
             Username = null;
             Session = null;
@@ -106,6 +118,7 @@ namespace WinFormsApp2
                 Wire(next);
                 if (previous != null)
                 {
+                    if (previous is SessionForm closing) closing.PermitApplicationClose();
                     previous.Close();
                     previous.Dispose();
                 }
@@ -144,6 +157,7 @@ namespace WinFormsApp2
                 screen.PageRequested += OnPageRequested;
                 screen.LogoutRequested += OnLogoutRequested;
                 screen.SessionRevoked += OnSessionRevoked;
+                screen.LockRequested += OnLockRequested;
             }
         }
 
@@ -155,13 +169,15 @@ namespace WinFormsApp2
                 screen.PageRequested -= OnPageRequested;
                 screen.LogoutRequested -= OnLogoutRequested;
                 screen.SessionRevoked -= OnSessionRevoked;
+                screen.LockRequested -= OnLockRequested;
             }
         }
 
         private void OnLoginSucceeded(object? sender, LoginSucceededEventArgs e)
         {
-            if (ReferenceEquals(sender, MainForm)) StartSession(e.Session);
+            if (!ReferenceEquals(sender, MainForm) || !StartSession(e.Session)) e.Session.Remote?.End();
         }
+        private void OnLockRequested(object? sender, EventArgs e) { if (ReferenceEquals(sender, MainForm)) idleGuard?.Lock(); }
 
         private void OnPageRequested(object? sender, PageRequestedEventArgs e)
         {
@@ -242,6 +258,8 @@ namespace WinFormsApp2
         }
         private void StopBackgroundWork()
         {
+            Session?.Remote?.End();
+            idleGuard?.Dispose(); idleGuard = null;
             backupTimer?.Dispose(); backupTimer = null;
             sessionTimer?.Dispose(); sessionTimer = null;
             sessionLifetime?.Cancel(); sessionLifetime?.Dispose(); sessionLifetime = null;
@@ -304,6 +322,10 @@ namespace WinFormsApp2
             AppPage.Contact => new Contact(),
             AppPage.Admin => new Admin(),
             AppPage.Payments => new PaymentsForm(),
+            AppPage.ProjectFinance => new ProjectFinanceForm(),
+            AppPage.ProjectWorkforce => new ProjectWorkforceForm(),
+            AppPage.ProjectPortal => new ProjectPortalForm(),
+            AppPage.DailyClosings => new DailyClosingsForm(),
             AppPage.Settings => new SettingsForm(),
             AppPage.LeavePlan => new LeavePlanForm(),
             AppPage.PasswordChange => new PasswordChangeForm(),

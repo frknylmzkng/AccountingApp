@@ -50,7 +50,7 @@ public partial class GuideDatabaseTests
         var target = await TargetAsync(admin.Username);
         Assert.Throws<InvalidOperationException>(() => new AdminStore(connection).Delete(admin, target));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.admin"), Is.EqualTo(1));
-        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"), Is.Zero);
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"), Is.Zero);
     }
     [Test, Category("Roles")]
     public async Task ConcurrentLegacyAccountDeletesKeepOneActiveAdministrator()
@@ -74,7 +74,7 @@ public partial class GuideDatabaseTests
         var latest = await TargetAsync(target.Username);
         Assert.That(latest.Version, Is.EqualTo(target.Version)); Assert.That(latest.Epoch, Is.EqualTo(target.Epoch));
         using var c = new SqlConnection(connection); c.Open(); using var cmd = new SqlCommand("SELECT IsActive FROM dbo.admin WHERE username=@name", c); cmd.Text("@name", target.Username);
-        Assert.That(cmd.ExecuteScalar(), Is.EqualTo(active)); Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"), Is.EqualTo(auditCount)); Assert.That(FailureCount, Is.EqualTo(2));
+        Assert.That(cmd.ExecuteScalar(), Is.EqualTo(active)); Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"), Is.EqualTo(auditCount)); Assert.That(FailureCount, Is.EqualTo(2));
     }
 
     [TestCase(0, 0), TestCase(1, 0), TestCase(2, 0)]
@@ -89,7 +89,7 @@ public partial class GuideDatabaseTests
         if (operation == 2) await Accounts.SetActiveAsync(admin, await TargetAsync(actor.Username), false, default);
         var current = await TargetAsync(actor.Username); SeedTargetThrottle(current);
         var submitted = stalePart switch { 1 => current with { Epoch = stale.Epoch }, 2 => current with { Version = stale.Version }, _ => stale };
-        int audits = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"));
+        int audits = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"));
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => ChangeSelectedAccount(submitted, operation));
 
@@ -117,7 +117,7 @@ public partial class GuideDatabaseTests
             await Accounts.ResetPasswordAsync(admin, await TargetAsync(actor.Username), KnownPassword);
         }
         var current = await TargetAsync(actor.Username); SeedTargetThrottle(current);
-        int audits = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"));
+        int audits = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"));
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => ChangeSelectedAccount(stale, operation));
         Assert.That(error!.Message, Is.EqualTo(AccountTarget.ConflictMessage));
         await AssertTargetUnchanged(current, currentActive, audits);
@@ -127,9 +127,9 @@ public partial class GuideDatabaseTests
     public async Task MissingAccountCannotBeManagedUsingADeletedSelection(int operation)
     {
         CreateActor("deleted-target", UserRole.Viewer); var stale = await TargetAsync("deleted-target");
-        await Accounts.DeleteAsync(admin, stale, default); int audits = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"));
+        await Accounts.DeleteAsync(admin, stale, default); int audits = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"));
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => ChangeSelectedAccount(stale, operation));
-        Assert.That(error!.Message, Is.EqualTo(AccountTarget.ConflictMessage)); Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"), Is.EqualTo(audits));
+        Assert.That(error!.Message, Is.EqualTo(AccountTarget.ConflictMessage)); Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"), Is.EqualTo(audits));
     }
 
     [TestCase(0), TestCase(1), TestCase(2), Category("Roles")]
@@ -152,7 +152,7 @@ public partial class GuideDatabaseTests
         var actor = CreateActor("rollback-target", UserRole.Viewer);
         if (operation == 2) await Accounts.SetActiveAsync(admin, await TargetAsync(actor.Username), false, default);
         var target = await TargetAsync(actor.Username); SeedTargetThrottle(target);
-        int audits = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"));
+        int audits = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"));
         Execute("CREATE TRIGGER dbo.GuideBlockAudit ON dbo.AuditLog AFTER INSERT AS IF EXISTS(SELECT 1 FROM inserted WHERE Action IN(N'Account.Delete',N'Account.Deactivate',N'Account.Activate')) THROW 51099,N'Test account audit failure',1;");
         await Assert.ThrowsAsync<SqlException>(() => ChangeSelectedAccount(target, operation));
         await AssertTargetUnchanged(target, operation != 2, audits);
@@ -162,12 +162,12 @@ public partial class GuideDatabaseTests
     public async Task ConcurrentDeleteAndDeactivateOnTheSameSelectionHaveOneWinner()
     {
         CreateActor("race-target", UserRole.Viewer); var target = await TargetAsync("race-target");
-        var other = CreateActor("other-admin", UserRole.Admin); int audits = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"));
+        var other = CreateActor("other-admin", UserRole.Admin); int audits = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"));
         static async Task<bool> Try(Task action) { try { await action; return true; } catch (InvalidOperationException) { return false; } }
         bool[] results = await Task.WhenAll(Try(ChangeSelectedAccount(target, 0)), Try(ChangeSelectedAccount(target, 1, other)));
         Assert.That(results.Count(won => won), Is.EqualTo(1));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.admin WHERE username=N'race-target'"), Is.EqualTo(results[0] ? 0 : 1));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.admin WHERE username=N'race-target' AND IsActive=1"), Is.Zero);
-        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"), Is.EqualTo(audits + 1));
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"), Is.EqualTo(audits + 1));
     }
 }

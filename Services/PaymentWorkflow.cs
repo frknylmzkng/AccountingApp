@@ -5,14 +5,32 @@ using Microsoft.Data.SqlClient;
 namespace WinFormsApp2;
 
 internal enum PaymentStatus { Unconfirmed, Recorded, Reversed, Rejected }
+internal enum PaymentPurpose { Settlement, Advance }
 internal sealed record PaymentRequest(Guid RequestId, PersonnelGroup Group, long Tc, decimal Amount, long ClosureId)
 {
+    // Missing fields identify the original on-disk format. Such requests can be
+    // inspected, but cannot create a new payment without a selected row version.
+    public int FormatVersion { get; init; }
+    public byte[]? PersonVersion { get; init; }
+    public Guid? PersonId { get; init; }
+    public string? AuditReason { get; init; }
+    public PaymentPurpose Purpose { get; init; }
+    public Guid? ProjectId { get; init; }
     internal void Validate()
     {
+        if (AuditReason != null) _ = AuditContext.ValidateReason(AuditReason);
+        if (!Enum.IsDefined(Purpose) || ProjectId == Guid.Empty || (Purpose == PaymentPurpose.Advance && !ProjectId.HasValue))
+            throw new InvalidOperationException("Ödeme türü veya avans projesi geçersiz.");
         if (RequestId == Guid.Empty || !Enum.IsDefined(Group) || Tc < 10000000000L || Tc > 99999999999L ||
             Amount <= 0 || Amount > 9999999999999999.99m || decimal.Round(Amount, 2) != Amount || ClosureId < 0)
             throw new InvalidOperationException("Bekleyen ödeme bilgisi geçersiz. Yeni ödeme başlatılmadı.");
+        if ((FormatVersion == 0 && (PersonVersion != null || PersonId != null)) ||
+            (FormatVersion is 2 or 3 && PersonVersion is not { Length: 8 }) ||
+            (FormatVersion == 3 && (!PersonId.HasValue || PersonId == Guid.Empty)) ||
+            (PersonId.HasValue && PersonId == Guid.Empty) || FormatVersion is not (0 or 2 or 3))
+            throw new InvalidOperationException("Bekleyen ödemenin sürüm bilgisi geçersiz. Yeni ödeme başlatılmadı.");
     }
+    internal PaymentRequest Snapshot() { Validate(); return this with { PersonVersion = PersonVersion?.ToArray() }; }
 }
 internal sealed record PaymentOutcome(PaymentStatus Status, string? Reason = null);
 internal sealed record PaymentState(PaymentRequest Request, PaymentOutcome Outcome);
@@ -20,9 +38,13 @@ internal sealed record PaymentJournalEntry(PaymentRequest Request, PaymentOutcom
 
 internal interface IPaymentGateway
 {
-    Task<PaymentRequest> PreparePaymentAsync(PersonnelGroup group, long tc, decimal amount, CancellationToken token);
+    Task<PaymentRequest> PreparePaymentAsync(PersonnelGroup group, long tc, decimal amount, byte[] expectedVersion, CancellationToken token);
     Task<PaymentOutcome> InspectPaymentAsync(PaymentRequest request, CancellationToken token);
     Task<PaymentOutcome> SubmitPaymentAsync(PaymentRequest request, CancellationToken token);
+}
+internal interface IAdvancePaymentGateway
+{
+    Task<PaymentRequest> PrepareAdvanceAsync(PersonnelGroup group, long tc, decimal amount, byte[] expectedVersion, Guid projectId, CancellationToken token);
 }
 
 // One unresolved intent per Windows user/database, shared across screens and application instances.
@@ -33,9 +55,13 @@ internal sealed class PaymentJournal
     internal string PathName { get; }
     internal PaymentJournal(string connectionString, string? directory = null)
     {
-        var b = new SqlConnectionStringBuilder(connectionString);
-        string file = string.IsNullOrWhiteSpace(b.AttachDBFilename) ? "" : Path.GetFullPath(b.AttachDBFilename).ToUpperInvariant();
-        scope = b.DataSource.ToUpperInvariant() + "|" + b.InitialCatalog.ToUpperInvariant() + "|" + file;
+        if (connectionString.StartsWith("api-scope:", StringComparison.Ordinal)) scope = connectionString;
+        else
+        {
+            var b = new SqlConnectionStringBuilder(connectionString);
+            string file = string.IsNullOrWhiteSpace(b.AttachDBFilename) ? "" : Path.GetFullPath(b.AttachDBFilename).ToUpperInvariant();
+            scope = b.DataSource.ToUpperInvariant() + "|" + b.InitialCatalog.ToUpperInvariant() + "|" + file;
+        }
         string name = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(scope)));
         PathName = Path.Combine(directory ?? Path.Combine(UserPreferences.DirectoryPath, "payments"), name + ".pending");
     }
@@ -66,10 +92,11 @@ internal sealed class PaymentJournal
 internal sealed class PaymentWorkflow(PaymentJournal journal, IPaymentGateway gateway, UserSession user)
 {
     internal PaymentWorkflow(string connectionString, UserSession user)
-        : this(new PaymentJournal(connectionString), new PersonnelService(connectionString, user), user) { }
+        : this(new PaymentJournal(DesktopConnection.IsRemote(connectionString) ? "api-scope:" + RemoteApi.For(connectionString, user).Scope : connectionString), new PersonnelService(connectionString, user), user) { }
 
     internal async Task<PaymentState?> InspectAsync(CancellationToken token = default)
     {
+        user.DemandViewSalary();
         using var lease = journal.Acquire();
         var entry = lease.Read();
         return entry == null ? null : await InspectAsync(entry, token).ConfigureAwait(false);
@@ -82,20 +109,31 @@ internal sealed class PaymentWorkflow(PaymentJournal journal, IPaymentGateway ga
         return new(entry.Request, actual.Status == PaymentStatus.Unconfirmed && entry.Rejection != null ? entry.Rejection : actual);
     }
 
-    internal async Task<PaymentState> BeginAsync(PersonnelGroup group, long tc, decimal amount, CancellationToken token = default)
+    internal async Task<PaymentState> BeginAsync(PersonnelGroup group, long tc, decimal amount, byte[] expectedVersion, CancellationToken token = default,
+        PaymentPurpose purpose = PaymentPurpose.Settlement, Guid? projectId = null)
     {
-        user.DemandEdit();
+        user.DemandPay();
+        var selected = PaymentTarget.RequireSnapshot(new(group, tc, expectedVersion));
         using var lease = journal.Acquire();
         if (lease.Read() != null) throw new InvalidOperationException("Önce önceki ödemenin sonucunu kontrol edip onaylayın.");
-        var request = await gateway.PreparePaymentAsync(group, tc, amount, token).ConfigureAwait(false);
-        request.Validate();
+        if (!Enum.IsDefined(purpose) || (purpose == PaymentPurpose.Advance && (!projectId.HasValue || projectId == Guid.Empty)))
+            throw new ArgumentException("Avans için proje seçin.");
+        var prepared = purpose == PaymentPurpose.Advance
+            ? await (gateway as IAdvancePaymentGateway ?? throw new InvalidOperationException("Avans servisi kullanılamıyor."))
+                .PrepareAdvanceAsync(selected.Group, selected.Tc, amount, selected.PersonVersion.ToArray(), projectId!.Value, token).ConfigureAwait(false)
+            : await gateway.PreparePaymentAsync(selected.Group, selected.Tc, amount, selected.PersonVersion.ToArray(), token).ConfigureAwait(false);
+        var request = prepared.Snapshot() with { AuditReason = AuditContext.Reason };
+        if (request.Purpose != purpose || (purpose == PaymentPurpose.Advance && request.ProjectId != projectId))
+            throw new InvalidOperationException("Ödeme türü/proje eşleşmedi; ödeme gönderilmedi.");
+        if (request.FormatVersion != 3 || request.Group != selected.Group || request.Tc != selected.Tc || request.Amount != amount ||
+            !request.PersonVersion!.SequenceEqual(selected.PersonVersion)) throw new InvalidOperationException(PaymentTarget.SelectionMessage);
         var entry = new PaymentJournalEntry(request);
         lease.Write(entry); // Must reach disk before any balance-changing command is sent.
         return await SubmitAsync(lease, entry, token).ConfigureAwait(false);
     }
     internal async Task<PaymentState> RetryAsync(CancellationToken token = default)
     {
-        user.DemandEdit();
+        user.DemandPay();
         using var lease = journal.Acquire();
         var entry = lease.Read() ?? throw new InvalidOperationException("Bekleyen ödeme bulunamadı. Listeyi yenileyin.");
         var state = await InspectAsync(entry, token).ConfigureAwait(false);
@@ -111,7 +149,7 @@ internal sealed class PaymentWorkflow(PaymentJournal journal, IPaymentGateway ga
     }
     internal async Task AcknowledgeAsync(CancellationToken token = default)
     {
-        user.DemandEdit();
+        user.DemandPay();
         using var lease = journal.Acquire();
         var entry = lease.Read();
         if (entry == null) return;

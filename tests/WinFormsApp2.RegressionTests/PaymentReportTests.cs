@@ -11,8 +11,8 @@ public partial class GuideDatabaseTests
     private PaymentReportService Reports => new(connection, admin);
     private async Task<Guid> SeedReportPayment(decimal amount = 30m)
     {
-        await Service.SaveAsync(PersonnelGroup.General, Person(amount: 1000m), true);
-        var id = Guid.NewGuid(); await Service.PayAsync(PersonnelGroup.General, Person().Tc, amount, id); return id;
+        await Service.SaveAsync(PersonnelGroup.General, Person(amount: 1000m), true, employmentStart: new DateTime(2000, 1, 1));
+        var id = Guid.NewGuid(); await Service.PayCurrentAsync(PersonnelGroup.General, Person().Tc, amount, id); return id;
     }
     private void ReportPaymentDate(Guid id, DateTime value)
     {
@@ -25,7 +25,7 @@ public partial class GuideDatabaseTests
     {
         var id = await SeedReportPayment(); var stale = await Service.LedgerAsync();
         await new PersonnelService(connection, CreateActor("second-admin", UserRole.Admin)).ReversePaymentAsync(id);
-        int audits = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"));
+        int audits = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"));
         var report = await Reports.ReceiptAsync(id);
         Assert.That(stale.AsEnumerable().Single(r => r["RequestId"] is Guid)["ReversedUtc"], Is.EqualTo(DBNull.Value));
         Assert.That(report.Reference, Is.EqualTo(id.ToString("N")));
@@ -34,13 +34,13 @@ public partial class GuideDatabaseTests
         Assert.That(report.Lines.Any(s => s.StartsWith("Veri zamanı (UTC):")), Is.True);
         Assert.That(report.Lines, Does.Contain("Raporu oluşturan: test-admin"));
         Assert.That(string.Join("\n", report.Lines), Does.Not.Contain(Person().Tc.ToString()));
-        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog"), Is.EqualTo(audits));
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"), Is.EqualTo(audits));
     }
     [Test, Category("Reports")]
-    public async Task OldReceiptDoesNotBorrowDetailsFromRecreatedPerson()
+    public async Task OldReceiptDoesNotBorrowDetailsFromReactivatedPerson()
     {
-        var id = await SeedReportPayment(); await Service.DeleteAsync(PersonnelGroup.General, Person().Tc, await VersionAsync());
-        await Service.SaveAsync(PersonnelGroup.General, Person(amount: 777m) with { FirstName = "Replacement" }, true);
+        var id = await SeedReportPayment(); await Service.DeleteAsync(PersonnelGroup.General, Person().Tc, await VersionAsync(), employmentEnd: new DateTime(2099, 12, 31));
+        await ReactivateAndEditAsync(PersonnelGroup.General, Person(amount: 777m) with { FirstName = "Replacement" });
         var report = await Reports.ReceiptAsync(id);
         Assert.That(report.Lines, Does.Contain("Durum: Kaydedildi"));
         Assert.That(string.Join("\n", report.Lines), Does.Not.Contain("Replacement").And.Not.Contain("777").And.Not.Contain(Person().Iban));
@@ -49,7 +49,7 @@ public partial class GuideDatabaseTests
     [Test, Category("Reports")]
     public async Task ReceiptRemainsAvailableAfterPersonDeletion()
     {
-        var id = await SeedReportPayment(); await Service.DeleteAsync(PersonnelGroup.General, Person().Tc, await VersionAsync());
+        var id = await SeedReportPayment(); await Service.DeleteAsync(PersonnelGroup.General, Person().Tc, await VersionAsync(), employmentEnd: new DateTime(2099, 12, 31));
         Assert.That((await Reports.ReceiptAsync(id)).Reference, Is.EqualTo(id.ToString("N")));
     }
     [Test, Category("Reports")]
@@ -64,9 +64,9 @@ public partial class GuideDatabaseTests
     {
         var id = await SeedReportPayment(); var stale = await Service.LedgerAsync();
         await Service.ReversePaymentAsync(id);
-        var other = new PersonnelService(connection, CreateActor("report-operator", UserRole.PersonnelManager));
-        await other.PayAsync(PersonnelGroup.General, Person().Tc, 45m, Guid.NewGuid());
-        var report = await Reports.ClosingAsync(DateTime.Today, 50m);
+        var other = new PersonnelService(connection, CreateActor("report-operator", UserRole.PersonnelManager, canPay: true));
+        await other.PayCurrentAsync(PersonnelGroup.General, Person().Tc, 45m, Guid.NewGuid());
+        var report = await Reports.ClosingAsync(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, DailyClosingService.BusinessZone).Date, 50m);
         Assert.That(stale.AsEnumerable().Count(r => r.Field<string>("Kind") == "Payment"), Is.EqualTo(1));
         Assert.That(report.Difference, Is.EqualTo(5m));
         Assert.That(report.Lines, Does.Contain("Geçerli ödeme sayısı: 1"));
@@ -75,42 +75,42 @@ public partial class GuideDatabaseTests
         Assert.That(report.Title, Does.Contain("ÖNİZLEMESİ"));
     }
     [Test, Category("Reports")]
-    public async Task ClosingUsesLocalDayHalfOpenUtcRangeAndExcludesOtherKinds()
+    public async Task ClosingUsesBusinessDayHalfOpenUtcRangeAndExcludesOtherKinds()
     {
         var id = await SeedReportPayment(10m); var day = new DateTime(2026, 10, 20);
-        var range = PaymentReportService.UtcDayRange(day, TimeZoneInfo.Local);
+        var range = PaymentReportService.UtcDayRange(day, DailyClosingService.BusinessZone);
         ReportPaymentDate(id, range.Start);
-        var before = Guid.NewGuid(); await Service.PayAsync(PersonnelGroup.General, Person().Tc, 20m, before); ReportPaymentDate(before, range.Start.AddTicks(-1));
-        var last = Guid.NewGuid(); await Service.PayAsync(PersonnelGroup.General, Person().Tc, 30m, last); ReportPaymentDate(last, range.End.AddTicks(-1));
-        var after = Guid.NewGuid(); await Service.PayAsync(PersonnelGroup.General, Person().Tc, 40m, after); ReportPaymentDate(after, range.End);
+        var before = Guid.NewGuid(); await Service.PayCurrentAsync(PersonnelGroup.General, Person().Tc, 20m, before); ReportPaymentDate(before, range.Start.AddTicks(-1));
+        var last = Guid.NewGuid(); await Service.PayCurrentAsync(PersonnelGroup.General, Person().Tc, 30m, last); ReportPaymentDate(last, range.End.AddTicks(-1));
+        var after = Guid.NewGuid(); await Service.PayCurrentAsync(PersonnelGroup.General, Person().Tc, 40m, after); ReportPaymentDate(after, range.End);
         var report = await Reports.ClosingAsync(day, 40m);
         Assert.That(report.Difference, Is.Zero); Assert.That(report.Lines, Does.Contain("Geçerli ödeme sayısı: 2"));
     }
     [Test, Category("Reports")]
     public async Task LaterReversalIsReflectedInOriginalDaysCurrentPreview()
     {
-        var id = await SeedReportPayment(); var day = DateTime.Today.AddDays(-2); ReportPaymentDate(id, PaymentReportService.UtcDayRange(day, TimeZoneInfo.Local).Start.AddHours(1));
+        var id = await SeedReportPayment(); var day = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, DailyClosingService.BusinessZone).Date.AddDays(-2); ReportPaymentDate(id, PaymentReportService.UtcDayRange(day, DailyClosingService.BusinessZone).Start.AddHours(1));
         Assert.That((await Reports.ClosingAsync(day, 30m)).Difference, Is.Zero);
         await Service.ReversePaymentAsync(id);
         Assert.That((await Reports.ClosingAsync(day, 30m)).Difference, Is.EqualTo(30m));
-        Assert.That((await Reports.ClosingAsync(DateTime.Today, 0m)).Difference, Is.Zero);
+        Assert.That((await Reports.ClosingAsync(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, DailyClosingService.BusinessZone).Date, 0m)).Difference, Is.Zero);
     }
     [TestCase(UserRole.Viewer), TestCase(UserRole.PersonnelManager), TestCase(UserRole.Admin), Category("Reports")]
-    public async Task ReportsHonorReadRoleAndRevokedSession(UserRole role)
+    public async Task ReportsHonorExplicitExportGrantAndRevokedSession(UserRole role)
     {
-        var id = await SeedReportPayment(); var actor = CreateActor("report-reader", role); var reports = new PaymentReportService(connection, actor);
+        var id = await SeedReportPayment(); var actor = CreateActor("report-reader", role, canExport: true); var reports = new PaymentReportService(connection, actor);
         Assert.That((await reports.ReceiptAsync(id)).Reference, Is.EqualTo(id.ToString("N")));
-        Assert.That((await reports.ClosingAsync(DateTime.Today, 30m)).Difference, Is.Zero);
+        Assert.That((await reports.ClosingAsync(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, DailyClosingService.BusinessZone).Date, 30m)).Difference, Is.Zero);
         Execute("UPDATE dbo.admin SET IsActive=0 WHERE username=N'report-reader'");
         await Assert.ThrowsAsync<SessionRevokedException>(() => reports.ReceiptAsync(id));
-        await Assert.ThrowsAsync<SessionRevokedException>(() => reports.ClosingAsync(DateTime.Today, 30m));
+        await Assert.ThrowsAsync<SessionRevokedException>(() => reports.ClosingAsync(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, DailyClosingService.BusinessZone).Date, 30m));
     }
     [Test, Category("Reports")]
     public async Task CancelledReportReadDoesNotProduceFallbackReport()
     {
         var id = await SeedReportPayment(); using var cancel = new CancellationTokenSource(); cancel.Cancel();
         Assert.That(async () => await Reports.ReceiptAsync(id, cancel.Token), Throws.InstanceOf<OperationCanceledException>());
-        Assert.That(async () => await Reports.ClosingAsync(DateTime.Today, 0m, cancel.Token), Throws.InstanceOf<OperationCanceledException>());
+        Assert.That(async () => await Reports.ClosingAsync(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, DailyClosingService.BusinessZone).Date, 0m, cancel.Token), Throws.InstanceOf<OperationCanceledException>());
     }
     [Test, Category("Reports")]
     public async Task ClosingWaitsForUncommittedChangesAndNeverReportsDirtyTotals()
@@ -119,7 +119,7 @@ public partial class GuideDatabaseTests
         await using var transaction = (SqlTransaction)await c.BeginTransactionAsync();
         using var cmd = new SqlCommand("UPDATE dbo.PaymentLedger SET ReversedUtc=SYSUTCDATETIME() WHERE RequestId=@id", c, transaction);
         cmd.Parameters.Add("@id", SqlDbType.UniqueIdentifier).Value = id; await cmd.ExecuteNonQueryAsync();
-        var reading = Reports.ClosingAsync(DateTime.Today, 30m);
+        var reading = Reports.ClosingAsync(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, DailyClosingService.BusinessZone).Date, 30m);
         await Task.Delay(100); Assert.That(reading.IsCompleted, Is.False);
         await transaction.RollbackAsync();
         Assert.That((await reading.WaitAsync(TimeSpan.FromSeconds(10))).Difference, Is.Zero);
@@ -128,7 +128,7 @@ public partial class GuideDatabaseTests
     public void PaymentScreenPrintsFreshReportsFromStaleGridAndOriginalSelection()
     {
         var id = SeedReportPayment().GetAwaiter().GetResult(); var stale = Service.LedgerAsync().GetAwaiter().GetResult();
-        Service.ReversePaymentAsync(id).GetAwaiter().GetResult(); Service.PayAsync(PersonnelGroup.General, Person().Tc, 45m, Guid.NewGuid()).GetAwaiter().GetResult();
+        Service.ReversePaymentAsync(id).GetAwaiter().GetResult(); Service.PayCurrentAsync(PersonnelGroup.General, Person().Tc, 45m, Guid.NewGuid()).GetAwaiter().GetResult();
         var field = typeof(AppDatabase).GetField("settings", BindingFlags.NonPublic | BindingFlags.Static)!; object? previous = field.GetValue(null);
         var b = new SqlConnectionStringBuilder(connection); field.SetValue(null, new DatabaseSettings(b.DataSource, b.InitialCatalog, b.AttachDBFilename, 30));
         try
@@ -148,7 +148,7 @@ public partial class GuideDatabaseTests
                 Assert.That(captured, Is.Not.Null, "Preview must use the authorized fresh report.");
             }
             InvokeAndWait("Receipt"); Assert.That(captured!.Reference, Is.EqualTo(id.ToString("N"))); Assert.That(captured.Lines, Does.Contain("Durum: İptal edildi"));
-            captured = null; Field<TextBox>("declared").Text = "50"; Field<DateTimePicker>("day").Value = DateTime.Today;
+            captured = null; Field<TextBox>("declared").Text = "50"; Field<DateTimePicker>("day").Value = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, DailyClosingService.BusinessZone).Date;
             InvokeAndWait("PrintClosing"); Assert.That(captured!.Difference, Is.EqualTo(5m));
             Assert.That(captured.Lines, Does.Contain("Geçerli ödeme sayısı: 1")); form.Close();
         }
@@ -163,7 +163,7 @@ public class PaymentReportInputTests
     public void InvalidDeclaredAmountIsRejectedBeforeConnection(decimal value)
     {
         var reports = new PaymentReportService("invalid", new("reader", UserRole.Viewer));
-        Assert.ThrowsAsync<ArgumentException>(() => reports.ClosingAsync(DateTime.Today, value));
+        Assert.ThrowsAsync<ArgumentException>(() => reports.ClosingAsync(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, DailyClosingService.BusinessZone).Date, value));
     }
     [Test]
     public void EmptyReceiptIdentityIsRejectedBeforeConnection()

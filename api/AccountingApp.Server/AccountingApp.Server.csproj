@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <UseWindowsForms>true</UseWindowsForms>
+    <DisableWinExeOutputInference>true</DisableWinExeOutputInference>
+    <OutputType>WinExe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <NuGetAuditMode>all</NuGetAuditMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Update="server.json;database-profile.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
+    <Content Update="server.example.json;database-profile.example.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../PACKAGE-README.md" Link="API-README.md" CopyToPublishDirectory="PreserveNewest" />
+    <ProjectReference Include="../../WinFormsApp2.csproj" />
+    <ProjectReference Include="../AccountingApp.Contracts/AccountingApp.Contracts.csproj" />
+  </ItemGroup>
+  <!-- Legacy desktop content is not a server configuration or deployment input. -->
+  <Target Name="ExcludeDesktopProfileFromApiPublish" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(ResolvedFileToPublish.RelativePath)' == 'appsettings.json' Or '%(ResolvedFileToPublish.RelativePath)' == 'WinFormsApp2.exe' Or '%(ResolvedFileToPublish.RelativePath)' == 'WinFormsApp2.deps.json' Or '%(ResolvedFileToPublish.RelativePath)' == 'WinFormsApp2.runtimeconfig.json'" />
+    </ItemGroup>
+  </Target>
+</Project>
