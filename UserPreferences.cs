@@ -20,23 +20,25 @@ internal sealed class UserPreferences
     public string MirrorFolder { get; set; } = "";
     public string LogoPath { get; set; } = "";
     internal static string? TestDirectory { private get; set; }
+    internal static string? TestRegistryPath { private get; set; }
+    private static string RegistryPath => TestRegistryPath ?? @"Software\AccountingApp";
     public static string DirectoryPath => TestDirectory ??
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AccountingApp");
-    public static UserPreferences Load(string? directory = null, string registryPath = @"Software\AccountingApp")
+    public static UserPreferences Load(string? directory = null, string? registryPath = null)
     {
         try { return JsonSerializer.Deserialize<UserPreferences>(File.ReadAllText(Path.Combine(directory ?? DirectoryPath, "preferences.json"))) ?? new(); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            try { using var key = Registry.CurrentUser.OpenSubKey(registryPath); return JsonSerializer.Deserialize<UserPreferences>(key?.GetValue("Preferences") as string ?? "{}") ?? new(); }
+            try { using var key = Registry.CurrentUser.OpenSubKey(registryPath ?? RegistryPath); return JsonSerializer.Deserialize<UserPreferences>(key?.GetValue("Preferences") as string ?? "{}") ?? new(); }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or System.Security.SecurityException) { return new(); }
         }
     }
-    public void Save(string? directory = null, string registryPath = @"Software\AccountingApp")
+    public void Save(string? directory = null, string? registryPath = null)
     {
         string json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }); bool saved = false;
         try { AtomicFile.Write(Path.Combine(directory ?? DirectoryPath, "preferences.json"), Encoding.UTF8.GetBytes(json)); saved = true; }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) { AppLog.Event("Preferences.FileUnavailable"); }
-        try { using var key = Registry.CurrentUser.CreateSubKey(registryPath); key.SetValue("Preferences", json); saved = true; }
+        try { using var key = Registry.CurrentUser.CreateSubKey(registryPath ?? RegistryPath); key.SetValue("Preferences", json); saved = true; }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) { AppLog.Event("Preferences.RegistryFallbackUnavailable"); }
         if (!saved) throw new IOException("Kullanıcı ayarları dosyaya veya kayıt defterine yazılamadı.");
     }
