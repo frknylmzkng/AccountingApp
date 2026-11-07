@@ -1,5 +1,9 @@
 # Değişiklik günlüğü
 
+## 2026-11-07 — Şifreli yedekleme regresyonları
+
+Yedekleme ve geri yükleme testleri şifreli `.bak.abk` arşivlerine ve geçici test kasasına geçirildi. Aynalama testleri mevcut farklı içerikli kopyanın korunduğunu ve işlem kaydı yazılamadığında yeniden deneme yapılabildiğini denetler. Saklama temizliği geri yükleme için seçilen şifreli arşivi hem güvenlik yedeği hem de şema yükseltmesi sırasında korur.
+
 ## 2026-11-07 — 1.3.33-dev kaynak teslimi
 
 28 Ekim–7 Kasım 2026 arasında geliştirilen masaüstü istemcisi, merkezi API, SQL şema yükseltmeleri, dağıtım araçları ve kullanım belgeleri bu kaynak tesliminde bir araya getirildi. Aşağıdaki kayıtlar geliştirme ile yerel kurulum tarihlerini ayrı gösterir. [Pilot ve teslim kaydı](docs/PILOT_VE_TESLIM_1_3_33_DEV.md)

@@ -17,7 +17,10 @@ public partial class GuideDatabaseTests
             else Execute("DELETE dbo.__MigrationJournal WHERE ScriptName=N'future-restore-test';");
         }
         if (brokenMigration)
-            Execute("ALTER TABLE dbo.izinler DROP COLUMN LeaveVersion; ALTER TABLE dbo.izinler ADD LeaveVersion binary(8) NULL; DELETE dbo.__MigrationJournal WHERE ScriptName LIKE N'%105-leave-rowversion.sql:%';");
+        {
+            RemoveLeaveVersionAndDependentIndexes();
+            Execute("ALTER TABLE dbo.izinler ADD LeaveVersion binary(8) NULL;");
+        }
         else Execute("INSERT dbo.__MigrationJournal(ScriptName,Applied) VALUES(N'future-restore-test',GETUTCDATE());");
         try
         {

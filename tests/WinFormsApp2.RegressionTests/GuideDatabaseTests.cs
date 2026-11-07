@@ -85,7 +85,7 @@ public partial class GuideDatabaseTests
     public async Task StartupUpgradeIsRepeatableAndPreservesExistingRows()
     {
         await Service.SaveAsync(PersonnelGroup.General, Person(), true, employmentStart: new DateTime(2000, 1, 1)); await SchemaUpgrade.PrepareAsync(connection); await SchemaUpgrade.PrepareAsync(connection);
-        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(13)); Assert.That(Scalar("SELECT COUNT(*) FROM dbo.Calisan"), Is.EqualTo(1));
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(38)); Assert.That(Scalar("SELECT COUNT(*) FROM dbo.Calisan"), Is.EqualTo(1));
     }
     [Test, Category("Migrations")]
     public async Task UnversionedLegacyDatabaseUpgradesWithoutFalseBaselineOrDataLoss()
@@ -110,7 +110,7 @@ public partial class GuideDatabaseTests
             using var check = new SqlCommand("SELECT RoleName,password,password_hash,(SELECT PARA FROM dbo.Calisan),(SELECT SUM(Delta) FROM dbo.PaymentLedger),OBJECT_ID(N'dbo.SchemaMigrations') FROM dbo.admin", verify);
             using var reader = check.ExecuteReader(); Assert.That(reader.Read(), Is.True); Assert.That(reader.GetString(0), Is.EqualTo("Admin")); Assert.That(reader.GetString(1), Is.Empty);
             Assert.That(PasswordHasher.Verify("Test-only-password-123", reader.GetString(2)), Is.True); Assert.That(reader.GetDecimal(3), Is.EqualTo(1500.50m)); Assert.That(reader.GetDecimal(4), Is.EqualTo(1500.50m)); Assert.That(reader.IsDBNull(5), Is.True);
-            Assert.That(Directory.GetFiles(Path.Combine(folder, "safety"), "*.bak"), Has.Length.EqualTo(1));
+            Assert.That(Directory.GetFiles(Path.Combine(folder, "safety"), "*.bak.abk"), Has.Length.EqualTo(1));
         }
         finally
         {
@@ -487,7 +487,7 @@ public partial class GuideDatabaseTests
         Assert.That(Scalar("SELECT password_hash FROM dbo.admin WHERE username=N'test-admin'"), Is.EqualTo(beforeHash));
         Assert.That(Scalar("SELECT PARA FROM dbo.Calisan"), Is.EqualTo(100m));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.PaymentLedger"), Is.EqualTo(1));
-        Assert.That(Directory.GetFiles(folder, "*.bak"), Has.Length.EqualTo(1));
+        Assert.That(Directory.GetFiles(folder, "*.bak.abk"), Has.Length.EqualTo(1));
         Assert.That(await AccountAuthorization.IsCurrentAsync(connection, previous, default), Is.False);
         Assert.That(SessionFor("test-admin").SecurityVersion, Is.EqualTo(version));
         Assert.That(SessionFor("test-admin").SecurityEpoch, Is.EqualTo(epoch));
@@ -605,8 +605,8 @@ public partial class GuideDatabaseTests
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.izinler"), Is.EqualTo(1));
         Assert.That(Scalar("SELECT SUM(Delta) FROM dbo.PaymentLedger"), Is.EqualTo(270m));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"), Is.EqualTo(auditCount));
-        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(13));
-        Assert.That(Directory.GetFiles(backups, "*.bak"), Has.Length.EqualTo(1));
+        Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(38));
+        Assert.That(Directory.GetFiles(backups, "*.bak.abk"), Has.Length.EqualTo(1));
     }
     [Test, Category("Migrations")]
     public async Task FailedRowVersionUpgradeRollsBackDdlAndLeavesBusinessDataUntouched()
@@ -621,7 +621,7 @@ public partial class GuideDatabaseTests
             Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal WHERE ScriptName LIKE N'%101-personnel-rowversion.sql:%'"), Is.Zero);
             Assert.That(Scalar("SELECT PARA FROM dbo.Calisan"), Is.EqualTo(100m));
             Assert.That(Scalar("SELECT COUNT(*) FROM dbo.PaymentLedger"), Is.EqualTo(1));
-            Assert.That(Directory.GetFiles(backups, "*.bak"), Has.Length.EqualTo(1));
+            Assert.That(Directory.GetFiles(backups, "*.bak.abk"), Has.Length.EqualTo(1));
         }
         finally
         {
@@ -828,12 +828,14 @@ public partial class GuideDatabaseTests
         var backup = new BackupService(connection, admin);
         string folder = Path.Combine(directory, "restore-retention-" + Guid.NewGuid().ToString("N"));
         await Service.SaveAsync(PersonnelGroup.General, Person(), true, employmentStart: new DateTime(2000, 1, 1));
+        Directory.CreateDirectory(folder);
+        BackupFixtures.EnableRetention(folder);
         string original = await backup.BackupAsync(folder);
         string prefix = BackupPrefix;
-        string selected = Path.Combine(folder, prefix + "0000.bak");
+        string selected = Path.Combine(folder, prefix + "0000.bak.abk");
         File.Move(original, selected);
-        File.Move(original + ".verified", selected + ".verified"); File.Move(original + BackupScope.ManifestSuffix, selected + BackupScope.ManifestSuffix);
-        for (int i = 1; i < 14; i++) { string copy = Path.Combine(folder, prefix + i.ToString("D4") + ".bak"); File.Copy(selected, copy); File.Copy(selected + BackupScope.ManifestSuffix, copy + BackupScope.ManifestSuffix); }
+        File.Move(original + ".verified", selected + ".verified");
+        for (int i = 1; i < 14; i++) { string copy = Path.Combine(folder, prefix + i.ToString("D4") + ".bak.abk"); File.Copy(selected, copy); }
         byte[] digest = System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(selected));
         await Service.DeleteAsync(PersonnelGroup.General, Person().Tc, await VersionAsync(), employmentEnd: new DateTime(2099, 12, 31));
 
@@ -844,7 +846,7 @@ public partial class GuideDatabaseTests
         Assert.That(File.Exists(selected), Is.True);
         Assert.That(File.Exists(selected + ".verified"), Is.True);
         Assert.That(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(selected)), Is.EqualTo(digest));
-        Assert.That(Directory.GetFiles(folder, prefix + "*.bak").Length, Is.InRange(14, 15));
+        Assert.That(Directory.GetFiles(folder, prefix + "*.bak.abk").Length, Is.InRange(14, 15));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action=N'Backup.Restore'"), Is.EqualTo(1));
     }
     [Test, Category("FullRestore")]
@@ -857,10 +859,12 @@ public partial class GuideDatabaseTests
         Execute("ALTER TABLE dbo.Calisan DROP COLUMN RecordVersion; ALTER TABLE dbo.Joker DROP COLUMN RecordVersion; DELETE FROM dbo.__MigrationJournal WHERE ScriptName LIKE N'%101-personnel-rowversion.sql:%'");
         try
         {
+            Directory.CreateDirectory(folder);
+            BackupFixtures.EnableRetention(folder);
             string original = await backup.BackupAsync(folder);
-            string prefix = BackupPrefix, selected = Path.Combine(folder, prefix + "0000.bak");
-            File.Move(original, selected); File.Move(original + ".verified", selected + ".verified"); File.Move(original + BackupScope.ManifestSuffix, selected + BackupScope.ManifestSuffix);
-            for (int i = 1; i < 14; i++) { string copy = Path.Combine(folder, prefix + i.ToString("D4") + ".bak"); File.Copy(selected, copy); File.Copy(selected + BackupScope.ManifestSuffix, copy + BackupScope.ManifestSuffix); }
+            string prefix = BackupPrefix, selected = Path.Combine(folder, prefix + "0000.bak.abk");
+            File.Move(original, selected); File.Move(original + ".verified", selected + ".verified");
+            for (int i = 1; i < 14; i++) { string copy = Path.Combine(folder, prefix + i.ToString("D4") + ".bak.abk"); File.Copy(selected, copy); }
             byte[] digest = System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(selected));
             Execute("UPDATE dbo.Calisan SET PARA=70");
 
@@ -869,10 +873,10 @@ public partial class GuideDatabaseTests
 
             Assert.That(Scalar("SELECT PARA FROM dbo.Calisan"), Is.EqualTo(100m));
             Assert.That(await VersionAsync(), Has.Length.EqualTo(8));
-            Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(13));
+            Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"), Is.EqualTo(38));
             Assert.That(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(selected)), Is.EqualTo(digest));
             Assert.That(File.Exists(selected + ".verified"), Is.True);
-            Assert.That(Directory.GetFiles(folder, prefix + "*.bak"), Has.Length.EqualTo(15));
+            Assert.That(Directory.GetFiles(folder, prefix + "*.bak.abk"), Has.Length.EqualTo(15));
         }
         finally { await SchemaUpgrade.PrepareAsync(connection, safetyFolder: folder); }
     }
@@ -890,6 +894,7 @@ public partial class GuideDatabaseTests
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await backup.RestoreAsync(selected, folder));
 
         Assert.That(Directory.GetFiles(folder, prefix + "*.bak"), Has.Length.EqualTo(14));
+        Assert.That(Directory.GetFiles(folder, "*.bak.abk"), Is.Empty);
         Assert.That(File.ReadAllText(selected), Is.EqualTo("invalid backup"));
         Assert.That(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action=N'Backup.Create'"), Is.Zero);
         Assert.That(Scalar("SELECT PARA FROM dbo.Calisan"), Is.EqualTo(100m));

@@ -61,30 +61,35 @@ public class GuidePureTests
     [Test, Category("Backup")]
     public void RetentionOnlyRemovesOwnBackupsAndKeepsNewestFourteen()
     {
-        string prefix = BackupFixtures.Scope("GuideTest").Prefix;
-        for (int i = 0; i < 18; i++) BackupFixtures.Write(Path.Combine(directory, prefix + i.ToString("D4") + ".bak"), BackupFixtures.Scope("GuideTest"), "test");
-        string unrelated = Path.Combine(directory, BackupFixtures.Scope("OtherDB").Prefix + "0000.bak"); File.WriteAllText(unrelated, "other");
+        var scope = BackupFixtures.Scope("GuideTest");
+        string prefix = scope.Prefix;
+        BackupFixtures.EnableRetention(directory);
+        for (int i = 0; i < 18; i++) BackupFixtures.Seal(directory, scope, i.ToString("D4"));
+        string unrelated = Path.Combine(directory, BackupFixtures.Scope("OtherDB").Prefix + "0000.bak.abk"); File.WriteAllText(unrelated, "other");
         File.WriteAllText(Path.Combine(directory, "notes.txt"), "keep"); BackupService.Prune(directory, prefix, 14);
-        Assert.That(Directory.GetFiles(directory, prefix + "*.bak"), Has.Length.EqualTo(14)); Assert.That(File.Exists(unrelated), Is.True);
-        Assert.That(File.Exists(Path.Combine(directory, prefix + "0003.bak")), Is.False); Assert.That(File.Exists(Path.Combine(directory, prefix + "0017.bak")), Is.True);
+        Assert.That(Directory.GetFiles(directory, prefix + "*.bak.abk"), Has.Length.EqualTo(14)); Assert.That(File.Exists(unrelated), Is.True);
+        Assert.That(File.Exists(Path.Combine(directory, prefix + "0003.bak.abk")), Is.False); Assert.That(File.Exists(Path.Combine(directory, prefix + "0017.bak.abk")), Is.True);
         Assert.Throws<ArgumentException>(() => BackupService.Prune(directory, "*", 14));
     }
     [Test, Category("Backup")]
     public void RetentionPreservesSelectedSourceAndVerificationMarker()
     {
-        string prefix = BackupFixtures.Scope("GuideTest").Prefix;
-        for (int i = 0; i < 18; i++) BackupFixtures.Write(Path.Combine(directory, prefix + i.ToString("D4") + ".bak"), BackupFixtures.Scope("GuideTest"), "test");
-        string selected = Path.Combine(directory, prefix + "0000.bak");
+        var scope = BackupFixtures.Scope("GuideTest");
+        string prefix = scope.Prefix;
+        BackupFixtures.EnableRetention(directory);
+        for (int i = 0; i < 18; i++) BackupFixtures.Seal(directory, scope, i.ToString("D4"));
+        string selected = Path.Combine(directory, prefix + "0000.bak.abk");
+        byte[] original = File.ReadAllBytes(selected);
         File.WriteAllText(selected + ".verified", "verified");
         string selectedSpelling = Path.Combine(directory, ".", Path.GetFileName(selected)).ToUpperInvariant();
 
         BackupService.Prune(directory, prefix, 14, selectedSpelling);
 
-        Assert.That(File.ReadAllText(selected), Is.EqualTo("test"));
+        Assert.That(File.ReadAllBytes(selected), Is.EqualTo(original));
         Assert.That(File.ReadAllText(selected + ".verified"), Is.EqualTo("verified"));
-        Assert.That(Directory.GetFiles(directory, prefix + "*.bak"), Has.Length.EqualTo(15));
-        Assert.That(File.Exists(Path.Combine(directory, prefix + "0001.bak")), Is.False);
-        Assert.That(File.Exists(Path.Combine(directory, prefix + "0017.bak")), Is.True);
+        Assert.That(Directory.GetFiles(directory, prefix + "*.bak.abk"), Has.Length.EqualTo(15));
+        Assert.That(File.Exists(Path.Combine(directory, prefix + "0001.bak.abk")), Is.False);
+        Assert.That(File.Exists(Path.Combine(directory, prefix + "0017.bak.abk")), Is.True);
     }
     [Test, Category("Profiles")]
     public void SqlExpressProfileUsesIntegratedSecurityAndNoAttach()

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Data.SqlClient;
 namespace WinFormsApp2;
 internal sealed partial class BackupService
 {
@@ -52,7 +53,13 @@ internal sealed partial class BackupService
         }
         catch(Exception ex)
         {
-            try{WriteMirrorState(path,pending with{Failure=ex is OperationCanceledException?"Cancelled":"CopyUnavailable"});}catch(IOException){}
+            string failure = ex switch
+            {
+                OperationCanceledException => "Cancelled",
+                SqlException => "AuditFailed",
+                _ => "CopyUnavailable"
+            };
+            try { WriteMirrorState(path, pending with { Failure = failure }); } catch (IOException) { }
             if(ex is OperationCanceledException or SessionRevokedException)throw;
             if(ex is IOException or UnauthorizedAccessException)throw new BackupMirrorException(path,ex);throw;
         }

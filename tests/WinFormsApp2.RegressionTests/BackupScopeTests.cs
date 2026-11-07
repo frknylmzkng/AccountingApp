@@ -42,21 +42,25 @@ public class BackupScopeTests
     }
 
     [Test]
-    public void RetentionPreservesForeignRenamedLegacyUnmanifestedAndCorruptFiles()
+    public void RetentionPreservesForeignRenamedLegacyAndCorruptFiles()
     {
         string root = Path.Combine(TestContext.CurrentContext.WorkDirectory, "scope-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
         try
         {
             var own = BackupFixtures.Scope("SameName"); var other = own with { FamilyId = Guid.NewGuid() };
-            for (int i = 0; i < 15; i++) BackupFixtures.Write(Path.Combine(root, own.Prefix + i.ToString("D4") + ".bak"), own, "owned");
-            string foreign = Path.Combine(root, own.Prefix + "9000.bak"); BackupFixtures.Write(foreign, other, "foreign");
-            string legacy = Path.Combine(root, "AccountingApp-1111111111111111-old.bak"); File.WriteAllText(legacy, "legacy");
-            string noManifest = Path.Combine(root, own.Prefix + "9001.bak"); File.WriteAllText(noManifest, "unknown");
-            string corrupt = Path.Combine(root, own.Prefix + "9002.bak"); BackupFixtures.Write(corrupt, own, "original"); File.WriteAllText(corrupt, "corrupt");
+            BackupFixtures.EnableRetention(root);
+            for (int i = 0; i < 15; i++) BackupFixtures.Seal(root, own, i.ToString("D4"));
+            string foreign = Path.Combine(root, own.Prefix + "9000.bak.abk");
+            File.Move(BackupFixtures.Seal(root, other, "9000"), foreign);
+            string legacy = Path.Combine(root, own.Prefix + "9001.bak");
+            BackupFixtures.Write(legacy, own, "legacy scoped backup");
+            string corrupt = BackupFixtures.Seal(root, own, "9002");
+            using (var truncated = new FileStream(corrupt, FileMode.Open, FileAccess.Write))
+                truncated.SetLength(truncated.Length - 1);
             BackupService.Prune(root, own.Prefix, 14);
-            foreach (string file in new[] { foreign, legacy, noManifest, corrupt }) Assert.That(File.Exists(file), Is.True, file);
-            Assert.That(File.Exists(Path.Combine(root, own.Prefix + "0000.bak")), Is.False);
-            Assert.That(Directory.GetFiles(root, "*.bak"), Has.Length.EqualTo(18));
+            foreach (string file in new[] { foreign, legacy, corrupt }) Assert.That(File.Exists(file), Is.True, file);
+            Assert.That(File.Exists(Path.Combine(root, own.Prefix + "0000.bak.abk")), Is.False);
+            Assert.That(Directory.GetFiles(root, "*.bak.abk"), Has.Length.EqualTo(16));
         }
         finally { Directory.Delete(root, true); }
     }
@@ -85,12 +89,12 @@ public class BackupScopeTests
 public partial class GuideDatabaseTests
 {
     [Test, Category("FullRestore")]
-    public async Task RestoreRejectsWrongManifestBeforeSafetyBackupOrDatabaseChanges()
+    public async Task RestoreRejectsWrongArchiveScopeBeforeSafetyBackupOrDatabaseChanges()
     {
         string folder = Path.Combine(directory, "wrong-scope"); var backup = new BackupService(connection, admin);
-        string path = await backup.BackupAsync(folder); string metadataPath = path + BackupScope.ManifestSuffix;
-        var metadata = JsonSerializer.Deserialize<BackupManifest>(File.ReadAllText(metadataPath))!;
-        File.WriteAllText(metadataPath, JsonSerializer.Serialize(metadata with { FamilyId = Guid.NewGuid() }));
+        var current = await BackupScope.ReadAsync(connection, default);
+        var other = current with { FamilyId = Guid.NewGuid() };
+        string path = BackupFixtures.Seal(folder, other, "foreign");
         string safety = Path.Combine(folder, "safety"); int audits = Convert.ToInt32(Scalar("SELECT COUNT(*) FROM dbo.AuditLog WHERE Action<>N'Record.Change'"));
         await Assert.ThrowsAsync<InvalidOperationException>(() => backup.RestoreAsync(path, safety));
         Assert.That(Directory.Exists(safety), Is.False);

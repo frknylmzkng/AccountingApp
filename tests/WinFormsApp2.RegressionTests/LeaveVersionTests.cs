@@ -159,18 +159,34 @@ public partial class GuideDatabaseTests
         Execute("CREATE TRIGGER dbo.GuideBlockAudit ON dbo.AuditLog AFTER INSERT AS IF EXISTS(SELECT 1 FROM inserted WHERE Action=N'Leave.SavePlan') THROW 51099,N'Test leave audit failure',1;");
         await Assert.ThrowsAsync<SqlException>(()=>Service.SaveLeavesAsync([(first,Period(2)),(second,Period(2))]));await AssertLeaveUnchanged(first,audits,ledger);await AssertLeaveUnchanged(second,audits,ledger);
     }
+    private void RemoveLeaveVersionAndDependentIndexes()
+    {
+        Execute("""
+            DROP INDEX IF EXISTS IX_Calisan_ActiveList ON dbo.Calisan;
+            DROP INDEX IF EXISTS IX_Joker_ActiveList ON dbo.Joker;
+            DROP INDEX IF EXISTS IX_Leave_PersonPeriod ON dbo.izinler;
+            DROP INDEX IF EXISTS IX_Leave_EndPeriod ON dbo.izinler;
+            ALTER TABLE dbo.izinler DROP COLUMN LeaveVersion;
+            DELETE dbo.__MigrationJournal
+            WHERE ScriptName LIKE N'%105-leave-rowversion.sql:%'
+               OR ScriptName LIKE N'%111-personnel-query-indexes.sql:%';
+            """);
+    }
+
     [Test,Category("Migrations")]
     public async Task LeaveVersionUpgradeIsRepeatableAndPreservesLeavesAndSessions()
     {
-        await SeedLeavePerson();var previous=admin;Execute("ALTER TABLE dbo.izinler DROP COLUMN LeaveVersion; DELETE dbo.__MigrationJournal WHERE ScriptName LIKE N'%105-leave-rowversion.sql:%'");
+        await SeedLeavePerson();var previous=admin;RemoveLeaveVersionAndDependentIndexes();
         string folder=Path.Combine(directory,"leave-upgrade");await SchemaUpgrade.PrepareAsync(connection,safetyFolder:folder);await SchemaUpgrade.PrepareAsync(connection,safetyFolder:folder);
-        Assert.That((await LeaveSelectionAsync()).LeaveVersion,Has.Length.EqualTo(8));Assert.That(Scalar("SELECT IZINBASLANGIC FROM dbo.izinler"),Is.EqualTo(Period(1).Start));Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"),Is.EqualTo(13));
-        Assert.That(await AccountAuthorization.IsCurrentAsync(connection,previous,default),Is.True);Assert.That(Directory.GetFiles(folder,"*.bak"),Has.Length.EqualTo(1));
+        Assert.That((await LeaveSelectionAsync()).LeaveVersion,Has.Length.EqualTo(8));Assert.That(Scalar("SELECT IZINBASLANGIC FROM dbo.izinler"),Is.EqualTo(Period(1).Start));Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal"),Is.EqualTo(38));
+        Assert.That(await AccountAuthorization.IsCurrentAsync(connection,previous,default),Is.True);Assert.That(Directory.GetFiles(folder,"*.bak.abk"),Has.Length.EqualTo(1));
     }
     [Test,Category("Migrations")]
     public async Task IncompatibleLeaveVersionStopsUpgradeWithoutRewritingLeaveData()
     {
-        await SeedLeavePerson();Execute("ALTER TABLE dbo.izinler DROP COLUMN LeaveVersion; ALTER TABLE dbo.izinler ADD LeaveVersion binary(8) NULL; DELETE dbo.__MigrationJournal WHERE ScriptName LIKE N'%105-leave-rowversion.sql:%'");
+        await SeedLeavePerson();
+        RemoveLeaveVersionAndDependentIndexes();
+        Execute("ALTER TABLE dbo.izinler ADD LeaveVersion binary(8) NULL;");
         string folder=Path.Combine(directory,"leave-upgrade-incompatible");
         try{await Assert.ThrowsAsync<InvalidOperationException>(()=>SchemaUpgrade.PrepareAsync(connection,safetyFolder:folder));Assert.That(Scalar("SELECT COUNT(*) FROM dbo.__MigrationJournal WHERE ScriptName LIKE N'%105-leave-rowversion.sql:%'"),Is.Zero);Assert.That(Scalar("SELECT IZINBASLANGIC FROM dbo.izinler"),Is.EqualTo(Period(1).Start));}
         finally{Execute("ALTER TABLE dbo.izinler DROP COLUMN LeaveVersion");await SchemaUpgrade.PrepareAsync(connection,safetyFolder:folder);}

@@ -100,11 +100,12 @@ internal sealed partial class BackupService(string connectionString, UserSession
             var scope=await BackupScope.ReadAsync(connectionString,token).ConfigureAwait(false);
             using var selectedLease=new FileStream(backupPath,FileMode.Open,FileAccess.Read,FileShare.Read);
             using var opened=await BackupVault.OpenAsync(backupPath,scope,token).ConfigureAwait(false);
-            await RestoreLegacyAsync(opened.BackupPath!,safetyFolder,token).ConfigureAwait(false);return;
+            await RestoreLegacyAsync(opened.BackupPath!, safetyFolder, token, backupPath).ConfigureAwait(false);
+            return;
         }
         await RestoreLegacyAsync(backupPath,safetyFolder,token).ConfigureAwait(false);
     }
-    private async Task RestoreLegacyAsync(string backupPath, string safetyFolder, CancellationToken token)
+    private async Task RestoreLegacyAsync(string backupPath, string safetyFolder, CancellationToken token, string? selectedArchivePath = null)
     {
         user.DemandAdmin();
         await Gate.WaitAsync(token).ConfigureAwait(false);
@@ -131,7 +132,8 @@ internal sealed partial class BackupService(string connectionString, UserSession
             var data = sources.AsEnumerable().Single(r => r["Type"].ToString() == "D"); var log = sources.AsEnumerable().Single(r => r["Type"].ToString() == "L");
             // Validate the selected source before creating/pruning backups. Retain it
             // even when the safety folder is the source folder and retention is full.
-            await BackupCoreAsync(safetyFolder, "", backupPath, token).ConfigureAwait(false);
+            string protectedBackupPath = selectedArchivePath ?? backupPath;
+            await BackupCoreAsync(safetyFolder, "", protectedBackupPath, token).ConfigureAwait(false);
             await AccountAuthorization.ValidateAsync(connectionString, user, AccountAccess.Admin, token).ConfigureAwait(false);
             SqlConnection.ClearAllPools();
             bool single = false;
@@ -161,7 +163,7 @@ internal sealed partial class BackupService(string connectionString, UserSession
                 }
                 SqlConnection.ClearAllPools();
             }
-            await SchemaUpgrade.PrepareAsync(connectionString, CancellationToken.None, safetyFolder, backupPath).ConfigureAwait(false);
+            await SchemaUpgrade.PrepareAsync(connectionString, CancellationToken.None, safetyFolder, protectedBackupPath).ConfigureAwait(false);
             await RecordAuditAsync("Backup.Restore", CancellationToken.None).ConfigureAwait(false);
         }
         finally { Gate.Release(); }

@@ -19,7 +19,9 @@ internal sealed class UserPreferences
     public string BackupFolder { get; set; } = "";
     public string MirrorFolder { get; set; } = "";
     public string LogoPath { get; set; } = "";
-    public static string DirectoryPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AccountingApp");
+    internal static string? TestDirectory { private get; set; }
+    public static string DirectoryPath => TestDirectory ??
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AccountingApp");
     public static UserPreferences Load(string? directory = null, string registryPath = @"Software\AccountingApp")
     {
         try { return JsonSerializer.Deserialize<UserPreferences>(File.ReadAllText(Path.Combine(directory ?? DirectoryPath, "preferences.json"))) ?? new(); }
