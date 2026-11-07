@@ -63,6 +63,7 @@ internal sealed class ListPager : FlowLayoutPanel
         var parent = grid.Parent ?? throw new InvalidOperationException("Liste yerleşimi kurulmamış.");
         var pager = new ListPager(owner, reload, unit);
         var host = new TableLayoutPanel { Dock = grid.Dock, Anchor = grid.Anchor, Location = grid.Location, Size = grid.Size, Margin = grid.Margin, TabIndex = grid.TabIndex, ColumnCount = 1, RowCount = 2 };
+        host.ColumnStyles.Add(new(SizeType.Percent, 100));
         host.RowStyles.Add(new(SizeType.Percent, 100)); host.RowStyles.Add(new(SizeType.AutoSize));
         int index = parent.Controls.GetChildIndex(grid);
         if (parent is TableLayoutPanel table)

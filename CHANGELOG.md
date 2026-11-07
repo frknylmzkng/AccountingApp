@@ -6,6 +6,8 @@ Proje ve mali belge eklemeleri kimlikleri tetikleyicilerle uyumlu biçimde dönd
 
 Regresyonlar ayrı ücret, IBAN, ödeme ve dışa aktarma yetkilerini, bağımsız proje avansı onayını ve güncel şema üzerinde işlem geri almayı denetler.
 
+Dar pencerede sayfalama alanı listenin kullanılabilir genişliğine göre satır değiştirir. Arayüz regresyonu, Genel Personel ekranını asgari pencere boyutunda da denetler ve kaydırılabilir bölümlerde her kontrolü görünür konuma getirip sınırlarını doğrular. Windows kayıt defteri tercihleri otomatik testlerde geçici bir anahtara yönlendirilir.
+
 ## 2026-11-07 — Şifreli yedekleme regresyonları
 
 Yedekleme ve geri yükleme testleri şifreli `.bak.abk` arşivlerine ve geçici test kasasına geçirildi. Aynalama testleri mevcut farklı içerikli kopyanın korunduğunu ve işlem kaydı yazılamadığında yeniden deneme yapılabildiğini denetler. Saklama temizliği geri yükleme için seçilen şifreli arşivi hem güvenlik yedeği hem de şema yükseltmesi sırasında korur.

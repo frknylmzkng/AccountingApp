@@ -2,7 +2,7 @@
 
 7 Kasım 2026 tarihinde 1.3.33-dev için yerel teslim hazırlığı tamamlandı. Operatör devri, mutabakat, kurtarma ve geri dönüş adımları kayıt altında. Gerçek kullanım pilotu ve saha kabulü bekliyor. [Pilot ve teslim kaydı](docs/PILOT_VE_TESLIM_1_3_33_DEV.md)
 
-7 Kasım 2026 güncel kaynak **1.3.33-dev / şema 137 / API 1.32**. Yedek seçimi ve sınırlı CSV sorguları iyileştirildi. Aynalama çakışması ve arşiv uzunluğu denetimi güçlendirildi. Rapor ve kasa kontrollerinin erişilebilir adları düzenlendi. İşlevsel denemeler pilotta açıktır. [İnceleme ve pilot matrisi](docs/PERFORMANS_ERISILEBILIRLIK_GUVENLIK_2026_11_07.md).
+7 Kasım 2026 güncel kaynak **1.3.33-dev / şema 138 / API 1.32**. Şema 138 proje maliyet görünümündeki ters hareket hesabını düzeltir. Yerel 1.3.33-dev teslim kaydı şema 137’ye aittir. Yedek seçimi, sınırlı CSV sorguları, aynalama ve klavye erişimi iyileştirildi. Gerçek kullanım pilotu bekliyor. [Değişiklik günlüğü](CHANGELOG.md) · [Pilot ve teslim kaydı](docs/PILOT_VE_TESLIM_1_3_33_DEV.md)
 
 6 Kasım 2026 güncel kaynak: [kurulum ve dağıtım sonlandırması](docs/DAGITIM_SONLANDIRMA_VE_COK_BILGISAYAR.md), **1.3.32-dev / şema 137 / API 1.32**. Tam ZIP/manifest doğrulama, salt okunur bakım/geri dönüş planı, bağımlılık envanteri, isteğe bağlı Authenticode ve kurulum kimlik kontrolleri eklendi. Çok bilgisayarlı bakım rehberi hazır. CI tam test kapısı korunur; denemeler/Actions yapılmadı. Doğrulanmış kurulum öncesi yedek sonrası 1.3.32-dev istemci/API/kısayol kurulumu tamamlandı; şema 137 değişmedi, paket imzasızdır. [Kalan 2 ana iş paketi](docs/KALAN_IS_PAKETLERI_2026_11_06.md). Aşağıdaki kayıtlar tarihseldir.
 

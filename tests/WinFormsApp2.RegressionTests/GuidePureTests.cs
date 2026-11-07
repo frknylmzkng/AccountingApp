@@ -254,37 +254,23 @@ public class GuideUiTests
         foreach (var field in AppTheme.Descendants(form).OfType<TextBox>().Where(field => field.Parent is not UpDownBase))
         { Assert.That(field.Visible, Is.True); Assert.That(field.Width, Is.GreaterThan(50)); Assert.That(field.Height, Is.GreaterThanOrEqualTo(field.PreferredHeight), field.Name); Assert.That(field.Parent!.ClientRectangle.Contains(field.Bounds), Is.True, field.Name); }
         if (form is Genel or Joker or Search or Contact or Admin or PaymentsForm or SettingsForm or LeavePlanForm or PasswordChangeForm)
-        foreach (var size in form is PaymentsForm or SettingsForm or LeavePlanForm or PasswordChangeForm ? new[] { form.Size, form.MinimumSize, new Size(1920, 1080) } : new[] { form.Size })
+        foreach (var size in form is Genel or PaymentsForm or SettingsForm or LeavePlanForm or PasswordChangeForm
+            ? new[] { form.Size, form.MinimumSize, form.LogicalToDeviceUnits(new Size(1920, 1080)) }
+            : new[] { form.Size })
         {
-            ResponsiveTestWindow.ResizeDevice(form, size); form.PerformLayout();
-            foreach (var control in AppTheme.Descendants(form).Where(c => c is Button or TextBox or DateTimePicker or ComboBox))
+            ResponsiveTestWindow.ResizeDevice(form, size);
+            foreach (var control in AppTheme.Descendants(form).Where(c => c.Visible && c is (Button or TextBox or DateTimePicker or ComboBox)))
             {
-                // Responsive sections intentionally scroll at the new small sizes.
-                // Check that each control can be brought fully into the viewport
-                // rather than requiring all sections to be onscreen together.
-                if (form is PaymentsForm)
-                {
-                    var workspace = AppTheme.Descendants(form).OfType<PaymentsWorkspace>().Single();
-                    workspace.ScrollControlIntoView(control); Application.DoEvents();
-                }
-                if (form is SettingsForm)
-                {
-                    var workspace = AppTheme.Descendants(form).OfType<SettingsWorkspace>().Single();
-                    workspace.ScrollControlIntoView(control); Application.DoEvents();
-                }
-                if (form is LeavePlanForm)
-                {
-                    var workspace = AppTheme.Descendants(form).OfType<LeavePlanWorkspace>().Single();
-                    workspace.ScrollControlIntoView(control); Application.DoEvents();
-                }
-                if (form is PasswordChangeForm)
-                {
-                    var workspace = AppTheme.Descendants(form).OfType<PasswordChangeWorkspace>().Single();
-                    workspace.ScrollControlIntoView(control); Application.DoEvents();
-                }
+                // A scrollable section may start below the viewport. Check the
+                // control after bringing it into view at every scrollable level.
+                for (var parent = control.Parent; parent != null; parent = parent.Parent)
+                    if (parent is ScrollableControl { AutoScroll: true } scrollable)
+                        scrollable.ScrollControlIntoView(control);
+                Application.DoEvents();
                 var bounds = control.RectangleToScreen(control.ClientRectangle);
                 for (var parent = control.Parent; parent != null; parent = parent.Parent)
-                    Assert.That(parent.RectangleToScreen(parent.ClientRectangle).Contains(bounds), Is.True, control.Name + " is clipped by " + parent.GetType().Name);
+                    Assert.That(parent.RectangleToScreen(parent.ClientRectangle).Contains(bounds), Is.True,
+                        $"{control.GetType().Name} {control.Name} {control.AccessibleName} at {bounds} is clipped by {parent.GetType().Name} {parent.Name} at {parent.RectangleToScreen(parent.ClientRectangle)} in window size {size}");
             }
         }
     }
